@@ -111,10 +111,17 @@ final class ChatStore {
             try await llm.ensureReady()
 
             // 2. Stream tokens. The model may call search_documents / web_search
-            //    inside this stream; retrieved sources arrive as citations.
-            let stream = await llm.reply(userText: userText) { [weak self] citations in
-                Task { @MainActor in self?.attachCitations(citations, to: messageID) }
-            }
+            //    inside this stream; retrieved sources arrive as citations and any
+            //    x402 payment (paid web search) arrives as an inline payment pill.
+            let stream = await llm.reply(
+                userText: userText,
+                onCitations: { [weak self] citations in
+                    Task { @MainActor in self?.attachCitations(citations, to: messageID) }
+                },
+                onPayment: { [weak self] event in
+                    Task { @MainActor in self?.attachPayment(event, to: messageID) }
+                }
+            )
             for try await chunk in stream {
                 if Task.isCancelled { break }
                 appendText(chunk, into: messageID)
@@ -148,6 +155,20 @@ final class ChatStore {
             merged.append(citation)
         }
         messages[index].citations = merged
+    }
+
+    /// Appends an inline payment pill from a paid tool (e.g. `web_search` settled
+    /// over x402), debits the shared wallet, and persists the transcript. The pill
+    /// lands between text segments, so later tokens continue after it.
+    private func attachPayment(_ event: PaymentEvent, to messageID: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
+        messages[index].segments.append(.payment(event))
+        wallet.recordPayment(event)
+        logger.debug("Agent paid \(event.amountLabel, privacy: .public) for \(event.label, privacy: .public)")
+        // Persist checkpoint: a payment is a durable part of the transcript.
+        notifyConversationChanged()
+        // The user's USDC dropped on-chain; pull the fresh balance.
+        Task { [wallet] in await wallet.refreshBalance() }
     }
 
     private func finishStreaming(messageID: UUID) {

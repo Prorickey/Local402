@@ -31,6 +31,7 @@ final class LLMStore {
     private let engine = LLMEngine()
     private var loadTask: Task<Void, Error>?
     private var ragRetrieve: (@Sendable (String, Int) async -> [SearchResult])?
+    private var webSearch: (@Sendable (String) async -> WebSearchResult?)?
 
     init(modelID: String = MockModels.default.id, modelName: String = MockModels.default.name) {
         self.modelID = modelID
@@ -41,6 +42,13 @@ final class LLMStore {
     /// tool. Applied to the engine when the model loads.
     func connectRAG(_ retrieve: @escaping @Sendable (String, Int) async -> [SearchResult]) {
         self.ragRetrieve = retrieve
+    }
+
+    /// Wire the Coinbase service into the model's `web_search` tool. Each call runs
+    /// a real Tavily search settled over x402; the result carries the hits and the
+    /// micropayment receipt. Applied to the engine when the model loads.
+    func connectWebSearch(coinbase: any CoinbaseServicing) {
+        self.webSearch = { query in try? await coinbase.search(query) }
     }
 
     var isReady: Bool { phase == .ready }
@@ -77,6 +85,7 @@ final class LLMStore {
         phase = .downloading(0)
         do {
             if let ragRetrieve { await engine.connectRAG(ragRetrieve) }
+            if let webSearch { await engine.connectWebSearch(webSearch) }
             try await engine.load(modelID: modelID) { [weak self] fraction, _ in
                 Task { @MainActor [weak self] in
                     guard let self, !self.isReady else { return }
@@ -94,9 +103,10 @@ final class LLMStore {
     /// documents; any retrieved sources are reported via `onCitations`.
     func reply(
         userText: String,
-        onCitations: @escaping @Sendable ([Citation]) -> Void
+        onCitations: @escaping @Sendable ([Citation]) -> Void,
+        onPayment: @escaping @Sendable (PaymentEvent) -> Void
     ) async -> AsyncThrowingStream<String, Error> {
-        await engine.reply(userText: userText, onCitations: onCitations)
+        await engine.reply(userText: userText, onCitations: onCitations, onPayment: onPayment)
     }
 
     /// Forget conversation history (e.g. when onboarding restarts).

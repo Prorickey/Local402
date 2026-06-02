@@ -70,9 +70,11 @@ final class AppState {
             defaultModelName: llm.modelName
         )
 
-        // Let the model query the on-device document store on demand via its
-        // `search_documents` tool.
+        // Expose the two agent tools to the model: a free, on-device document
+        // search (`search_documents`) and a paid Tavily web search settled over
+        // x402 (`web_search`).
         llm.connectRAG { query, topK in await rag.retrieve(query, topK: topK) }
+        llm.connectWebSearch(coinbase: coinbase)
 
         // Adopt a provisioned server wallet into the shared wallet store, then
         // refresh its on-chain balance.

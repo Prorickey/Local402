@@ -44,8 +44,13 @@ actor LLMEngine {
 
     /// Retrieval backend for the `search_documents` tool (wired to the RAG store).
     private var ragRetrieve: (@Sendable (String, Int) async -> [SearchResult])?
+    /// Real Tavily-over-x402 search backend for the `web_search` tool. Returns the
+    /// hits plus the on-chain micropayment that funded them (nil on failure).
+    private var webSearch: (@Sendable (String) async -> WebSearchResult?)?
     /// Sink for citations produced during the current reply (set per `reply`).
     private var citationSink: (@Sendable ([Citation]) -> Void)?
+    /// Sink for x402 payments made by paid tools during the current reply.
+    private var paymentSink: (@Sendable (PaymentEvent) -> Void)?
 
     init(tools: [AnyTool] = AgentTools.default) {
         self.tools = tools
@@ -57,6 +62,13 @@ actor LLMEngine {
     /// tool can query it. `retrieve(query, topK)` returns the best matches.
     func connectRAG(_ retrieve: @escaping @Sendable (String, Int) async -> [SearchResult]) {
         self.ragRetrieve = retrieve
+    }
+
+    /// Connect the paid web-search backend so the model's `web_search` tool runs a
+    /// real Tavily search settled over x402. `search(query)` returns the hits plus
+    /// the micropayment receipt, or nil if the search/settlement failed.
+    func connectWebSearch(_ search: @escaping @Sendable (String) async -> WebSearchResult?) {
+        self.webSearch = search
     }
 
     // MARK: - Loading
@@ -89,8 +101,10 @@ actor LLMEngine {
     }
 
     private func makeSession(for container: ModelContainer) -> ChatSession {
-        // search_documents (handled here) + any self-contained tools (web_search).
-        let toolSpecs = [AgentTools.documentSearchSchema] + tools.map(\.schema)
+        // search_documents + web_search are handled here (they need the RAG store
+        // and the Coinbase service); any self-contained tools are appended.
+        let toolSpecs = [AgentTools.documentSearchSchema, AgentTools.webSearchSchema]
+            + tools.map(\.schema)
 
         let dispatch: @Sendable (ToolCall) async throws -> String = { [weak self] call in
             guard let self else { return #"{"error":"engine released"}"# }
@@ -111,6 +125,9 @@ actor LLMEngine {
     private func dispatchTool(_ call: ToolCall) async throws -> String {
         if call.function.name == AgentTools.documentSearchName {
             return await handleDocumentSearch(call)
+        }
+        if call.function.name == AgentTools.webSearchName {
+            return await handleWebSearch(call)
         }
         if let tool = tools.first(where: { $0.name == call.function.name }) {
             return try await tool.dispatch(call)
@@ -133,6 +150,31 @@ actor LLMEngine {
         return Self.formatDocumentResults(hits)
     }
 
+    /// Runs a REAL Tavily search settled over x402, reports the micropayment to the
+    /// UI, and returns the results as text for the model to read.
+    private func handleWebSearch(_ call: ToolCall) async -> String {
+        let query = Self.stringArgument(call, "query")
+        guard let webSearch else {
+            logger.error("web_search called but no backend is connected")
+            return #"{"status":"unavailable","reason":"web search is not configured","results":[]}"#
+        }
+        guard let result = await webSearch(query) else {
+            logger.error("web_search failed for query")
+            return #"{"status":"error","reason":"the web search could not be completed","results":[]}"#
+        }
+
+        // Surface the x402 micropayment that funded this search to the UI.
+        let event = PaymentEvent(
+            amount: result.payment.amount,
+            label: result.payment.label.isEmpty ? "Tavily web search" : result.payment.label,
+            resource: result.payment.resource.isEmpty ? "x402.tavily.com/search" : result.payment.resource,
+            timestamp: Date()
+        )
+        paymentSink?(event)
+        logger.info("web_search → \(result.hits.count, privacy: .public) hit(s), paid \(event.amountLabel, privacy: .public)")
+        return Self.formatWebResults(result)
+    }
+
     // MARK: - Inference
 
     /// Streams the assistant's reply token-by-token. The model may call
@@ -140,9 +182,11 @@ actor LLMEngine {
     /// `ChatSession` handles the tool loop transparently inside the stream.
     func reply(
         userText: String,
-        onCitations: @escaping @Sendable ([Citation]) -> Void
+        onCitations: @escaping @Sendable ([Citation]) -> Void,
+        onPayment: @escaping @Sendable (PaymentEvent) -> Void
     ) -> AsyncThrowingStream<String, Error> {
         citationSink = onCitations
+        paymentSink = onPayment
         guard let session else {
             return AsyncThrowingStream { $0.finish(throwing: LLMError.notLoaded) }
         }
@@ -168,6 +212,20 @@ actor LLMEngine {
         return hits.enumerated().map { index, hit in
             "[\(index + 1)] \(hit.documentName) (p.\(hit.page)):\n\(hit.text)"
         }.joined(separator: "\n\n")
+    }
+
+    private static func formatWebResults(_ result: WebSearchResult) -> String {
+        var lines: [String] = []
+        if let answer = result.answer, !answer.isEmpty {
+            lines.append("Answer: \(answer)")
+        }
+        for (index, hit) in result.hits.prefix(5).enumerated() {
+            lines.append("[\(index + 1)] \(hit.title) (\(hit.url))\n\(hit.content)")
+        }
+        guard !lines.isEmpty else {
+            return #"{"results":[],"note":"no web results found"}"#
+        }
+        return lines.joined(separator: "\n\n")
     }
 
     private static let systemPrompt = """

@@ -59,35 +59,29 @@ enum AgentTools {
             .required("query", type: .string, description: "What to look up in the local documents")
         ]
     ) { _ in "" }.schema
-    /// Web search — a *paid* tool in Local402's model. For now it is a stub that
-    /// returns no results; when the payment system lands, this handler will call
-    /// Tavily and settle the charge over x402 before returning real hits. Keeping
-    /// it registered means the model already knows the capability exists and the
-    /// merge is a one-function change.
-    static let webSearch: AnyTool = Tool<QueryArg, String>(
-        name: "web_search",
+
+    /// Name the model emits to search the public web. Like `search_documents`,
+    /// dispatch is handled specially inside `LLMEngine`: the call runs a REAL
+    /// Tavily search settled over x402 (via `CoinbaseServicing`) and reports the
+    /// resulting micropayment back to the UI, so only the schema lives here.
+    static let webSearchName = "web_search"
+
+    static let webSearchSchema: ToolSpec = Tool<QueryArg, String>(
+        name: webSearchName,
         description: """
             Search the public web for current information that is NOT present in \
             the user's local documents. This is a billed tool: each call costs a \
-            small fee settled over x402. Only call it when local context is \
+            small fee (USDC) settled over x402. Only call it when local context is \
             insufficient and fresh external data is genuinely needed.
             """,
         parameters: [
             .required("query", type: .string, description: "The search query")
         ]
-    ) { args in
-        // STUB pending payment integration. Returns an empty, well-formed result
-        // so the model can gracefully continue ("I couldn't find external info").
-        let payload: [String: Any] = [
-            "status": "unavailable",
-            "reason": "web_search is stubbed until x402 payments are wired up",
-            "query": args.query,
-            "results": [],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: payload)
-        return String(decoding: data, as: UTF8.self)
-    }.erased()
+    ) { _ in "" }.schema
 
-    /// The default tool set handed to every chat session.
-    static let `default`: [AnyTool] = [webSearch]
+    /// Self-contained tools handed to every chat session. The two built-ins
+    /// (`search_documents`, `web_search`) are engine-handled — they need the RAG
+    /// store and the Coinbase service and report citations/payments to the UI —
+    /// so they are NOT listed here; this seam is for future stateless tools.
+    static let `default`: [AnyTool] = []
 }
