@@ -32,12 +32,13 @@ struct MainView: View {
                     switch appState.selectedTab {
                     case .chat:
                         ChatView()
+                    case .rag:
+                        RAGTerminalView()
                     case .wallet:
                         WalletView()
                     case .settings:
                         SettingsView()
                     }
-                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
             }

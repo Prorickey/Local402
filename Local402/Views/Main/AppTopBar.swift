@@ -20,6 +20,13 @@ struct AppTopBar: View {
         HStack(spacing: Theme.spacing.md) {
             historyToggle
             brand
+            TopBarTabButton(
+                tab: .rag,
+                isSelected: appState.selectedTab == .rag,
+                badge: nil
+            ) {
+                appState.selectedTab = .rag
+            }
             Spacer(minLength: Theme.spacing.lg)
             ForEach(AppTab.secondaryTabs, id: \.self) { tab in
                 TopBarTabButton(

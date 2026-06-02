@@ -1,0 +1,10 @@
+# Standalone local RAG prototype — versioned independently in its own git repo,
+# kept entirely out of Local402's history.
+local_rag/
+
+# macOS
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate

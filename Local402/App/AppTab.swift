@@ -9,12 +9,14 @@ import Foundation
 
 enum AppTab: Hashable, CaseIterable {
     case chat
+    case rag
     case wallet
     case settings
 
     var title: String {
         switch self {
         case .chat: return "Chat"
+        case .rag: return "RAG"
         case .wallet: return "Wallet"
         case .settings: return "Settings"
         }
@@ -23,6 +25,7 @@ enum AppTab: Hashable, CaseIterable {
     var systemImage: String {
         switch self {
         case .chat: return "bubble.left.and.text.bubble.right"
+        case .rag: return "terminal"
         case .wallet: return "dollarsign.circle"
         case .settings: return "gearshape"
         }

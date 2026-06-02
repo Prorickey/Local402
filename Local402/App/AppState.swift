@@ -25,6 +25,9 @@ final class AppState {
     let wallet: WalletStore
     let onboarding: OnboardingState
 
+    /// On-device RAG document store + retrieval (powers the RAG terminal).
+    let rag = RAGStore()
+
     /// Owns the real, persisted conversations + the live chat for the selected one.
     let conversations: ConversationManager
 
