@@ -39,6 +39,7 @@ struct MainView: View {
                     case .settings:
                         SettingsView()
                     }
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.opacity)
             }
