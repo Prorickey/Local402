@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import PassKit
 import os
 
 struct WalletFundingStepView: View {
@@ -43,10 +44,14 @@ struct WalletFundingStepView: View {
         switch state {
         case .idle:
             idle
-        case .confirming:
-            confirming
+        case .presentingApplePay:
+            settling(message: "Confirm payment in Apple Pay…")
+        case .settling:
+            settling(message: "Adding USDC to your Coinbase wallet…")
         case .funded(let txHash):
             funded(txHash: txHash)
+        case .failed(let message):
+            failed(message: message)
         }
     }
 
@@ -56,14 +61,35 @@ struct WalletFundingStepView: View {
         VStack(spacing: Theme.spacing.lg) {
             amountField
             quickPicks
+            fundButton
+            if !walletConnected {
+                Text("Set up your Coinbase wallet first to fund it.")
+                    .font(Theme.font.caption)
+                    .foregroundStyle(Theme.color.textTertiary)
+            }
+        }
+    }
+
+    /// Native Apple Pay button only when fully live; the styled button is used in
+    /// demo mode and when Apple Pay is simulated (no Merchant ID yet).
+    @ViewBuilder
+    private var fundButton: some View {
+        if CoinbaseConfig.demoMode || CoinbaseConfig.simulateApplePay {
             PrimaryButton(
-                title: "Fund wallet",
-                systemImage: "bolt.fill",
+                title: "Fund with Apple Pay",
+                systemImage: "apple.logo",
                 isEnabled: canFund,
                 action: onboarding.fundWallet
             )
-            if onboarding.coinbase != .connected {
-                Text("Connect Coinbase first to fund your wallet.")
+        } else {
+            ApplePayButton(action: onboarding.fundWallet)
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
+                .opacity(canFund && applePayAvailable ? 1 : 0.4)
+                .allowsHitTesting(canFund && applePayAvailable)
+                .help(applePayAvailable ? "Pay with Apple Pay" : "Apple Pay isn't available on this device.")
+            if !applePayAvailable {
+                Text("Apple Pay isn't available on this device.")
                     .font(Theme.font.caption)
                     .foregroundStyle(Theme.color.textTertiary)
             }
@@ -144,18 +170,41 @@ struct WalletFundingStepView: View {
         .help("Set starting balance to \(quickLabel(amount))")
     }
 
-    // MARK: - Confirming
+    // MARK: - In-flight (Apple Pay / settling)
 
-    private var confirming: some View {
+    private func settling(message: String) -> some View {
         VStack(spacing: Theme.spacing.md) {
             SpinnerView(size: 24, lineWidth: 3)
-            Text("Adding USDC to your Coinbase wallet…")
+            Text(message)
                 .font(Theme.font.callout)
                 .foregroundStyle(Theme.color.textSecondary)
+                .multilineTextAlignment(.center)
             Text(amountLabel)
                 .font(Theme.font.headline)
                 .foregroundStyle(Theme.color.textPrimary)
                 .monospacedDigit()
+        }
+    }
+
+    // MARK: - Failed
+
+    private func failed(message: String) -> some View {
+        VStack(spacing: Theme.spacing.md) {
+            HStack(spacing: Theme.spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Theme.color.textSecondary)
+                Text("Funding didn't go through")
+                    .font(Theme.font.headline)
+                    .foregroundStyle(Theme.color.textPrimary)
+            }
+            Text(message)
+                .font(Theme.font.callout)
+                .foregroundStyle(Theme.color.textSecondary)
+                .multilineTextAlignment(.center)
+
+            PrimaryButton(title: "Try again", systemImage: "arrow.clockwise") {
+                onboarding.resetFunding()
+            }
         }
     }
 
@@ -219,8 +268,17 @@ struct WalletFundingStepView: View {
 
     // MARK: - Derived values
 
+    private var walletConnected: Bool {
+        if case .connected = onboarding.coinbase { return true }
+        return false
+    }
+
+    private var applePayAvailable: Bool {
+        ApplePayFundingController.canMakePayments()
+    }
+
     private var canFund: Bool {
-        onboarding.coinbase == .connected && onboarding.fundingAmount > 0
+        walletConnected && onboarding.fundingAmount > 0
     }
 
     private var amountLabel: String {
@@ -242,9 +300,36 @@ struct WalletFundingStepView: View {
     private static let logger = Logger(subsystem: "Local402", category: "WalletFunding")
 }
 
+// MARK: - Native Apple Pay button (macOS)
+
+/// Wraps the native `PKPaymentButton` so SwiftUI can present the system Apple
+/// Pay button. The actual sheet is driven by `ApplePayFundingController`.
+private struct ApplePayButton: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeNSView(context: Context) -> PKPaymentButton {
+        let button = PKPaymentButton(paymentButtonType: .plain, paymentButtonStyle: .automatic)
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.tapped)
+        return button
+    }
+
+    func updateNSView(_ nsView: PKPaymentButton, context: Context) {
+        context.coordinator.action = action
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func tapped() { action() }
+    }
+}
+
 #Preview {
     let state = AppState()
-    state.onboarding.coinbase = .connected
+    state.onboarding.coinbase = .connected(address: "0x7a3f4b2e9d1c8f5a6b0e2d4c9f1a8b3e7c0d6f21")
     return ZStack {
         Theme.color.background.ignoresSafeArea()
         ScrollView {

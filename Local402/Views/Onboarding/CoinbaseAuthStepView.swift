@@ -30,6 +30,13 @@ struct CoinbaseAuthStepView: View {
             .shadow(color: .black.opacity(0.22), radius: 10, y: 2)
             .animation(.easeInOut(duration: 0.25), value: onboarding.coinbase)
         }
+        .onAppear {
+            // Agentic Wallet: provision the agent wallet automatically on entry
+            // (CDP getOrCreateAccount on the BFF) — no login, no button tap.
+            if case .disconnected = onboarding.coinbase {
+                onboarding.connectCoinbase()
+            }
+        }
     }
 
     // MARK: - State-driven content
@@ -41,54 +48,59 @@ struct CoinbaseAuthStepView: View {
     ) -> some View {
         switch state {
         case .disconnected:
-            disconnected(connect: connect)
-        case .connecting:
-            connecting
-        case .connected:
-            connected
+            preparing
+        case .creating:
+            creating
+        case .connected(let address):
+            connected(address: address)
+        case .failed(let message):
+            failed(message: message, retry: connect)
         }
     }
 
-    private func disconnected(connect: @escaping () -> Void) -> some View {
+    /// Shown the instant the step appears, before `connectCoinbase()` flips the
+    /// state to `.creating`. The wallet is provisioned automatically — there is
+    /// no button to tap.
+    private var preparing: some View {
         VStack(spacing: Theme.spacing.lg) {
             VStack(spacing: Theme.spacing.xs) {
-                Text("Connect your Coinbase account")
+                Text("Setting up your Coinbase wallet")
                     .font(Theme.font.headline)
                     .foregroundStyle(Theme.color.textPrimary)
-                Text("Local402 provisions a Coinbase wallet your agents use to pay per request. x402 payments settle through Coinbase, and no funds move until you approve them.")
+                Text("Local402 provisions a Coinbase agent wallet for you automatically — no login required. x402 payments settle through Coinbase, and no funds move until you approve them.")
                     .font(Theme.font.callout)
                     .foregroundStyle(Theme.color.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
-            PrimaryButton(title: "Connect Coinbase", systemImage: "link", action: connect)
+            SpinnerView(size: 24, lineWidth: 3)
         }
     }
 
-    private var connecting: some View {
+    private var creating: some View {
         VStack(spacing: Theme.spacing.md) {
             SpinnerView(size: 24, lineWidth: 3)
-            Text("Connecting to Coinbase…")
+            Text("Setting up your wallet…")
                 .font(Theme.font.callout)
                 .foregroundStyle(Theme.color.textSecondary)
 
-            PrimaryButton(title: "Connecting…", isEnabled: false) {}
+            PrimaryButton(title: "Setting up…", isEnabled: false) {}
         }
     }
 
-    private var connected: some View {
+    private func connected(address: String) -> some View {
         VStack(spacing: Theme.spacing.lg) {
             HStack(spacing: Theme.spacing.sm) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Theme.color.paymentGreen)
-                Text("Connected")
+                Text("Wallet ready")
                     .font(Theme.font.headline)
                     .foregroundStyle(Theme.color.paymentGreen)
             }
             .transition(.scale.combined(with: .opacity))
 
             VStack(spacing: Theme.spacing.sm) {
-                accountRow(label: "Account", value: "agent@local402.dev", systemImage: "person.circle")
+                accountRow(label: "Address", value: truncatedAddress(address), systemImage: "number", mono: true)
                 Divider().overlay(Theme.color.surfaceStroke)
                 accountRow(label: "Agent wallet", value: "Coinbase · USDC", systemImage: "wallet.pass")
             }
@@ -104,7 +116,30 @@ struct CoinbaseAuthStepView: View {
         }
     }
 
-    private func accountRow(label: String, value: String, systemImage: String) -> some View {
+    private func failed(message: String, retry: @escaping () -> Void) -> some View {
+        VStack(spacing: Theme.spacing.md) {
+            HStack(spacing: Theme.spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Theme.color.textSecondary)
+                Text("Couldn't set up your wallet")
+                    .font(Theme.font.headline)
+                    .foregroundStyle(Theme.color.textPrimary)
+            }
+            Text(message)
+                .font(Theme.font.callout)
+                .foregroundStyle(Theme.color.textSecondary)
+                .multilineTextAlignment(.center)
+
+            PrimaryButton(title: "Try again", systemImage: "arrow.clockwise", action: retry)
+        }
+    }
+
+    private func truncatedAddress(_ address: String) -> String {
+        guard address.count > 12 else { return address }
+        return "\(address.prefix(6))…\(address.suffix(4))"
+    }
+
+    private func accountRow(label: String, value: String, systemImage: String, mono: Bool = false) -> some View {
         HStack(spacing: Theme.spacing.sm) {
             Image(systemName: systemImage)
                 .font(.system(size: 13))
@@ -114,8 +149,9 @@ struct CoinbaseAuthStepView: View {
                 .foregroundStyle(Theme.color.textSecondary)
             Spacer()
             Text(value)
-                .font(Theme.font.callout)
+                .font(mono ? Theme.font.mono : Theme.font.callout)
                 .foregroundStyle(Theme.color.textPrimary)
+                .textSelection(.enabled)
         }
     }
 }
@@ -157,7 +193,23 @@ private struct CoinbaseLogoMark: View {
 
 #Preview("Connected") {
     let state = AppState()
-    state.onboarding.coinbase = .connected
+    state.onboarding.coinbase = .connected(address: "0x7a3f4b2e9d1c8f5a6b0e2d4c9f1a8b3e7c0d6f21")
+    return ZStack {
+        Theme.color.background.ignoresSafeArea()
+        ScrollView {
+            CoinbaseAuthStepView()
+                .frame(maxWidth: 560)
+                .padding(Theme.spacing.xl)
+        }
+    }
+    .environment(state)
+    .frame(width: 640, height: 640)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Failed") {
+    let state = AppState()
+    state.onboarding.coinbase = .failed("Network error: the BFF is unreachable.")
     return ZStack {
         Theme.color.background.ignoresSafeArea()
         ScrollView {

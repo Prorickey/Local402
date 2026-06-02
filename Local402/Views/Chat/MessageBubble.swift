@@ -13,7 +13,7 @@ import SwiftUI
 struct MessageBubble: View {
     let message: ChatMessage
 
-    private static let maxAnswerWidth: CGFloat = 720
+    static let maxAnswerWidth: CGFloat = 720
     private static let maxUserWidth: CGFloat = 560
 
     private var isUser: Bool { message.role == .user }

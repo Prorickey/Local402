@@ -170,7 +170,10 @@ struct SettingsView: View {
     }
 
     private var coinbaseStatus: some View {
-        let connected = appState.onboarding.coinbase == .connected
+        let connected: Bool = {
+            if case .connected = appState.onboarding.coinbase { return true }
+            return false
+        }()
         let tint = connected ? Theme.color.paymentGreen : Theme.color.textSecondary
         let soft = connected ? Theme.color.paymentGreenSoft : Theme.color.surfaceElevated
         return HStack(spacing: Theme.spacing.xs) {
@@ -190,8 +193,9 @@ struct SettingsView: View {
     private var coinbaseStatusText: String {
         switch appState.onboarding.coinbase {
         case .connected: return "Connected"
-        case .connecting: return "Connecting…"
+        case .creating: return "Setting up…"
         case .disconnected: return "Not connected"
+        case .failed: return "Setup failed"
         }
     }
 

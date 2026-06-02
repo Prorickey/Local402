@@ -175,7 +175,7 @@ struct OnboardingStepHeader: View {
 #Preview("Funding step") {
     let state = AppState()
     state.onboarding.step = .funding
-    state.onboarding.coinbase = .connected
+    state.onboarding.coinbase = .connected(address: "0x7a3f4b2e9d1c8f5a6b0e2d4c9f1a8b3e7c0d6f21")
     return OnboardingContainerView()
         .environment(state)
         .frame(width: 820, height: 720)
