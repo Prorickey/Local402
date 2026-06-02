@@ -25,9 +25,13 @@ final class AppState {
     let wallet: WalletStore
     let onboarding: OnboardingState
 
-    /// Chat is created lazily once onboarding picks a model, so the greeting
-    /// reflects the chosen model. Until then a default is used.
-    private(set) var chat: ChatStore
+    /// Owns the real, persisted conversations + the live chat for the selected one.
+    let conversations: ConversationManager
+
+    /// The live chat store for the currently selected conversation. Reflects the
+    /// conversation manager's selection; reading it here keeps every chat view
+    /// pointed at the active transcript when the user switches conversations.
+    var chat: ChatStore { conversations.chat }
 
     /// Mirrors the persisted onboarding flag so views can react. The persisted
     /// source of truth is `@AppStorage` in `RootView`.
@@ -46,10 +50,10 @@ final class AppState {
         self.onboarding = onboarding
 
         self.hasCompletedOnboarding = hasCompletedOnboarding
-        self.chat = ChatStore(
+        self.conversations = ConversationManager(
             wallet: wallet,
             coinbase: coinbase,
-            modelName: MockModels.all.first?.name ?? "Llama 3.1"
+            defaultModelName: MockModels.all.first?.name ?? "Llama 3.1"
         )
 
         // Adopt a provisioned server wallet into the shared wallet store, then
@@ -72,7 +76,7 @@ final class AppState {
     /// the live stores and rebuilds chat so the greeting names the chosen model.
     func completeOnboarding() {
         let modelName = onboarding.selectedModel?.name ?? chat.modelName
-        chat = ChatStore(wallet: wallet, coinbase: coinbase, modelName: modelName)
+        conversations.startFreshConversation(modelName: modelName)
 
         if case .funded = onboarding.funding {
             // In demo mode the mock seed reflects the starting balance directly;

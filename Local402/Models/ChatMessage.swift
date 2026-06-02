@@ -7,12 +7,12 @@
 
 import Foundation
 
-enum ChatRole: Hashable {
+enum ChatRole: Hashable, Codable {
     case user
     case assistant
 }
 
-struct ChatMessage: Identifiable, Hashable {
+struct ChatMessage: Identifiable, Hashable, Codable {
     let id: UUID
     let role: ChatRole
     var segments: [MessageSegment]

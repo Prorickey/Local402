@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct PaymentEvent: Identifiable, Hashable {
+struct PaymentEvent: Identifiable, Hashable, Codable {
     let id: UUID
     /// Amount in USDC.
     let amount: Decimal

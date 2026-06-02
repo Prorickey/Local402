@@ -4,51 +4,37 @@
 //
 //  The collapsible chat-history sidebar — the one genuinely desktop-Copilot
 //  pattern. Acrylic Fluent chrome with a "New chat" accent button and grouped
-//  conversation rows. Demo content only (simulated). See DESIGN.md §5.
+//  conversation rows. Backed by real, persisted conversations via the
+//  `ConversationManager`. See DESIGN.md §5.
 //
 
 import SwiftUI
 import os
 
-/// A single conversation entry in the history sidebar.
-private struct HistoryItem: Identifiable {
-    let id = UUID()
-    let title: String
-}
-
 struct Local402HistorySidebar: View {
+    @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    private static let logger = Logger(subsystem: "com.local402.app", category: "HistorySidebar")
+    private static let logger = Logger(subsystem: "tech.hiant.Local402", category: "HistorySidebar")
 
-    /// Demo conversations grouped by day. Simulated for the design demo.
-    private let today: [HistoryItem] = [
-        HistoryItem(title: "Q3 revenue analysis"),
-        HistoryItem(title: "Refactor onboarding flow"),
-        HistoryItem(title: "Summarize handbook"),
-        HistoryItem(title: "Competitor pricing scan"),
-    ]
-    private let yesterday: [HistoryItem] = [
-        HistoryItem(title: "Draft launch email"),
-        HistoryItem(title: "Debug payment retry"),
-    ]
+    private var manager: ConversationManager { appState.conversations }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.spacing.sm) {
             newChatButton
 
-            groupLabel("TODAY")
-                .padding(.top, Theme.spacing.lg)
+            ForEach(Array(manager.groups.enumerated()), id: \.element.id) { groupIndex, group in
+                groupLabel(group.title)
+                    .padding(.top, groupIndex == 0 ? Theme.spacing.lg : Theme.spacing.md)
 
-            ForEach(Array(today.enumerated()), id: \.element.id) { index, item in
-                HistoryRow(title: item.title, active: index == 0)
-            }
-
-            groupLabel("YESTERDAY")
-                .padding(.top, Theme.spacing.md)
-
-            ForEach(yesterday) { item in
-                HistoryRow(title: item.title, active: false)
+                ForEach(group.items) { item in
+                    HistoryRow(
+                        title: item.title.isEmpty ? Conversation.untitled : item.title,
+                        active: item.id == manager.selectedID,
+                        select: { manager.select(id: item.id) },
+                        delete: { manager.delete(id: item.id) }
+                    )
+                }
             }
 
             Spacer(minLength: 0)
@@ -77,7 +63,8 @@ struct Local402HistorySidebar: View {
 
     private var newChatButton: some View {
         Button {
-            Self.logger.info("New chat tapped (demo no-op)")
+            Self.logger.info("New chat tapped")
+            manager.newChat()
         } label: {
             HStack(spacing: Theme.spacing.sm) {
                 Image(systemName: "square.and.pencil")
@@ -109,19 +96,18 @@ struct Local402HistorySidebar: View {
 }
 
 /// A ~44pt conversation row with hover highlight. The active row gets an
-/// acrylic surface and a 3pt leading accent bar.
+/// acrylic surface and a 3pt leading accent bar. Right-click reveals a delete
+/// action so the resting visual stays clean.
 private struct HistoryRow: View {
     let title: String
     let active: Bool
+    let select: () -> Void
+    let delete: () -> Void
 
     @State private var hovering = false
 
-    private static let logger = Logger(subsystem: "com.local402.app", category: "HistorySidebar")
-
     var body: some View {
-        Button {
-            Self.logger.info("Conversation selected (demo no-op)")
-        } label: {
+        Button(action: select) {
             HStack(spacing: Theme.spacing.sm) {
                 Image(systemName: "bubble.left")
                     .font(.system(size: 16))
@@ -150,6 +136,11 @@ private struct HistoryRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(title)
+        .contextMenu {
+            Button(role: .destructive, action: delete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     @ViewBuilder private var rowBackground: some View {
@@ -166,6 +157,7 @@ private struct HistoryRow: View {
     ZStack {
         Theme.color.background.ignoresSafeArea()
         Local402HistorySidebar()
+            .environment(AppState())
             .frame(width: 280)
     }
     .frame(width: 280, height: 600)

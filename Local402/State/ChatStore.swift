@@ -24,6 +24,14 @@ final class ChatStore {
     /// Drives the Copilot-style spend-mode selector in the chat header.
     var spendMode: Int = 1
 
+    /// The conversation this store is bound to. Persisted writes key off this id.
+    let conversationID: UUID
+
+    /// Called at meaningful checkpoints (user message appended, streaming finished,
+    /// payment appended) so the owner can persist the transcript and refresh the
+    /// sidebar. Never fired per streamed token, to avoid hammering the disk.
+    var onConversationChanged: ((_ messages: [ChatMessage]) -> Void)?
+
     private let wallet: WalletStore
     private let coinbase: any CoinbaseServicing
     private var userTurns = 0
@@ -33,14 +41,42 @@ final class ChatStore {
     init(
         wallet: WalletStore,
         coinbase: (any CoinbaseServicing)? = nil,
-        modelName: String
+        modelName: String,
+        conversationID: UUID = UUID()
     ) {
         self.wallet = wallet
         // Resolved in the main-actor init: `MockCoinbaseService` is main-actor
         // isolated and so can't be a default argument.
         self.coinbase = coinbase ?? MockCoinbaseService()
         self.modelName = modelName
+        self.conversationID = conversationID
         seedGreeting()
+    }
+
+    /// Initializes from an existing persisted conversation: adopts its id, model,
+    /// and transcript verbatim (no greeting). An empty transcript is greeting-seeded
+    /// so a freshly created conversation still opens with the assistant's intro.
+    init(
+        wallet: WalletStore,
+        coinbase: (any CoinbaseServicing)? = nil,
+        conversation: Conversation
+    ) {
+        self.wallet = wallet
+        self.coinbase = coinbase ?? MockCoinbaseService()
+        self.modelName = conversation.modelName
+        self.conversationID = conversation.id
+        // Count prior user turns so the scripted demo replies continue in sequence.
+        self.userTurns = conversation.messages.filter { $0.role == .user }.count
+        if conversation.messages.isEmpty {
+            seedGreeting()
+        } else {
+            messages = conversation.messages
+        }
+    }
+
+    /// Notifies the owner that the transcript changed at a persist checkpoint.
+    private func notifyConversationChanged() {
+        onConversationChanged?(messages)
     }
 
     private func seedGreeting() {
@@ -57,6 +93,8 @@ final class ChatStore {
         draft = ""
         userTurns += 1
         messages.append(.text(content, role: .user, timestamp: Date()))
+        // Persist checkpoint: a user message (re)derives the title and updatedAt.
+        notifyConversationChanged()
 
         if CoinbaseConfig.demoMode {
             // DEMO: scripted beats (fabricated payments, no network).
@@ -76,6 +114,8 @@ final class ChatStore {
         if let index = messages.lastIndex(where: { $0.isStreaming }) {
             messages[index].isStreaming = false
         }
+        // Persist checkpoint: keep whatever was streamed before the user stopped.
+        notifyConversationChanged()
     }
 
     private func startStreaming(beats: [ReplyBeat]) {
@@ -226,6 +266,8 @@ final class ChatStore {
         messages[index].segments.append(.payment(event))
         wallet.recordPayment(event)
         logger.debug("Agent paid \(event.amountLabel, privacy: .public) for \(event.label, privacy: .public) (tx \(receipt.txHash, privacy: .public))")
+        // Persist checkpoint: a payment is a durable part of the transcript.
+        notifyConversationChanged()
     }
 
     /// Streams a text chunk word-by-word into the message's trailing text segment.
@@ -272,6 +314,8 @@ final class ChatStore {
         messages[index].segments.append(.payment(event))
         wallet.recordPayment(event)
         logger.debug("Agent paid \(event.amountLabel, privacy: .public) for \(event.label, privacy: .public)")
+        // Persist checkpoint: a payment is a durable part of the transcript.
+        notifyConversationChanged()
     }
 
     /// Synthesizes an x402 envelope from a scripted beat and settles it through
@@ -309,6 +353,8 @@ final class ChatStore {
         }
         isStreaming = false
         streamTask = nil
+        // Persist checkpoint: the completed assistant reply is now stable.
+        notifyConversationChanged()
     }
 
     /// Builds segments from beats immediately (used for the non-streamed greeting).
