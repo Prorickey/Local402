@@ -73,11 +73,13 @@ actor RAGEngine {
         guard !embedded.isEmpty else { throw RAGError.embeddingFailed("no chunks could be embedded") }
 
         onProgress(IngestProgress(fraction: 0.95, message: "Writing to vector store…"))
+        let sizeBytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? nil
         let meta = DocumentMeta(
             id: UUID().uuidString,
             filename: url.lastPathComponent,
             pageCount: extraction.pageCount,
             chunkCount: embedded.count,
+            sizeBytes: sizeBytes ?? 0,
             addedAt: Date()
         )
         try store.insertDocument(meta, chunks: embedded, dim: embeddingDimension)

@@ -18,19 +18,23 @@ struct ChatMessage: Identifiable, Hashable {
     var segments: [MessageSegment]
     let timestamp: Date
     var isStreaming: Bool
+    /// Local-document sources the model retrieved while answering, if any.
+    var citations: [Citation]
 
     init(
         id: UUID = UUID(),
         role: ChatRole,
         segments: [MessageSegment],
         timestamp: Date,
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        citations: [Citation] = []
     ) {
         self.id = id
         self.role = role
         self.segments = segments
         self.timestamp = timestamp
         self.isStreaming = isStreaming
+        self.citations = citations
     }
 
     /// Convenience for a plain-text message.

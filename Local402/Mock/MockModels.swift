@@ -2,7 +2,13 @@
 //  MockModels.swift
 //  Local402
 //
-//  Filler local-model options shown during onboarding.
+//  The local-model catalog shown during onboarding. These are REAL on-device
+//  models: each `id` is the Hugging Face `mlx-community` repo that `LLMEngine`
+//  downloads and runs via MLX. All are 4-bit quantized and tool-calling capable,
+//  so they fit comfortably on an Apple-silicon Mac.
+//
+//  Qwen2.5 1.5B is the recommended default — ~1 GB, fast on M-series, and strong
+//  at grounded RAG answers and function calling.
 //
 
 import Foundation
@@ -10,40 +16,43 @@ import Foundation
 enum MockModels {
     static let all: [LLMModelOption] = [
         LLMModelOption(
-            id: "llama-3.1-8b",
-            name: "Llama 3.1",
-            parameters: "8B",
-            sizeGB: 4.7,
-            recommendedRAMGB: 16,
-            description: "Balanced general-purpose model. Great default for most agent work.",
+            id: "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+            name: "Qwen2.5 1.5B",
+            parameters: "1.5B",
+            sizeGB: 1.0,
+            recommendedRAMGB: 8,
+            description: "Compact, fast, and tool-call capable. The recommended default — great for grounded RAG chat on any Apple-silicon Mac.",
             isRecommended: true
         ),
         LLMModelOption(
-            id: "mistral-7b",
-            name: "Mistral",
-            parameters: "7B",
-            sizeGB: 4.1,
-            recommendedRAMGB: 16,
-            description: "Fast and lightweight, strong at reasoning over short contexts.",
-            isRecommended: false
-        ),
-        LLMModelOption(
-            id: "qwen-2.5-14b",
-            name: "Qwen 2.5",
-            parameters: "14B",
-            sizeGB: 8.9,
-            recommendedRAMGB: 32,
-            description: "Higher quality for complex tasks. Needs more memory headroom.",
-            isRecommended: false
-        ),
-        LLMModelOption(
-            id: "phi-3-mini",
-            name: "Phi-3 Mini",
-            parameters: "3.8B",
-            sizeGB: 2.3,
+            id: "mlx-community/Llama-3.2-1B-Instruct-4bit",
+            name: "Llama 3.2 1B",
+            parameters: "1B",
+            sizeGB: 0.8,
             recommendedRAMGB: 8,
-            description: "Tiny and quick. Ideal for low-resource machines and quick tasks.",
+            description: "The lightest option. Fastest tokens-per-second with a modest quality trade-off — ideal for low-memory machines.",
             isRecommended: false
-        )
+        ),
+        LLMModelOption(
+            id: "mlx-community/Qwen2.5-3B-Instruct-4bit",
+            name: "Qwen2.5 3B",
+            parameters: "3B",
+            sizeGB: 1.8,
+            recommendedRAMGB: 16,
+            description: "Higher quality reasoning and tool use. A bit more memory and a little slower, but noticeably sharper answers.",
+            isRecommended: false
+        ),
+        LLMModelOption(
+            id: "mlx-community/Llama-3.2-3B-Instruct-4bit",
+            name: "Llama 3.2 3B",
+            parameters: "3B",
+            sizeGB: 1.8,
+            recommendedRAMGB: 16,
+            description: "Meta's instruction-tuned 3B. Balanced general-purpose alternative with solid function-calling support.",
+            isRecommended: false
+        ),
     ]
+
+    /// The default model used before onboarding picks one.
+    static let `default`: LLMModelOption = all.first { $0.isRecommended } ?? all[0]
 }

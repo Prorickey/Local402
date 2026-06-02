@@ -8,9 +8,9 @@
 
 Local402 is a native macOS desktop app that combines three things into a single interface:
 
-1. **Gemma 4 (local)** — Google's on-device model running entirely on your Apple Silicon hardware via Swift
-2. **Private RAG document store** — upload PDFs and internal documents that are chunked, embedded, and queried locally
-3. **x402-gated Tavily search** — when the model needs live web data, it fires a paid search query over Coinbase's x402 micropayment rail
+1. **A local LLM** — an open-weights model (Qwen2.5 / Llama 3.2) running entirely on your Apple Silicon hardware via **MLX**, streaming tokens in real time
+2. **Private RAG document store** — drop in PDFs that are chunked, embedded, and queried locally, then fed to the model as grounding context
+3. **x402-gated tools** — when the model needs live web data, it calls a paid tool that settles over Coinbase's x402 micropayment rail *(payment settlement is the next milestone; the tool-calling seam is already wired)*
 
 No data leaves your machine unless you authorize it — and when it does, you pay exactly once for exactly what you asked for.
 
@@ -20,7 +20,7 @@ No data leaves your machine unless you authorize it — and when it does, you pa
 
 The local model is the privacy boundary. When you feed private documents (contracts, financials, medical records, internal reports) into a hosted LLM, your full context window — including every document, every reasoning step — leaves your machine before any search is even formed.
 
-With Local402, Gemma 4 processes everything on-device using Apple Silicon's Neural Engine. The only signal that ever leaves is the final search query, deliberately sent, with a micropayment attached.
+With Local402, the model processes everything on-device on Apple Silicon's GPU via MLX. The only signal that ever leaves is a final search query, deliberately sent by the model as a tool call, with a micropayment attached.
 
 **Privacy surface comparison:**
 
@@ -28,7 +28,7 @@ With Local402, Gemma 4 processes everything on-device using Apple Silicon's Neur
 |---|---|---|
 | Your documents | Sent to provider | Stay on device |
 | Reasoning chain | Sent to provider | Stays on device |
-| Search queries | Sent to provider + search API | Sent to Tavily only, via x402 |
+| Search queries | Sent to provider + search API | Sent to a search API only, via x402 |
 | Provider data logging | Per their ToS | None |
 | Variable cost | Tokens + search | Search only |
 
@@ -36,25 +36,36 @@ With Local402, Gemma 4 processes everything on-device using Apple Silicon's Neur
 
 ## Core Features
 
-### Left Panel — RAG Document Store
-- Upload PDFs, Word docs, or plain text files
-- Documents are chunked and embedded locally using on-device embedding
-- Gemma 4 queries your documents before deciding whether to reach out to the web
-- All indexing and retrieval happens on-device — nothing is uploaded to a cloud vector store
+### RAG Document Store
+- Drop in PDFs; text is extracted, chunked, and embedded locally
+- Embeddings use Apple's on-device `NaturalLanguage` model — no cloud embedding service
+- Vectors live in a local SQLite store with cosine-similarity search
+- The model retrieves the top matches and grounds its answer in them before considering any paid tool
 
-### Top Right — x402 Coinbase Wallet
-- Connect your Coinbase smart wallet directly in the UI — no terminal, no `.env` file, no CLI setup
-- Each Tavily search call is gated behind an x402 micropayment
+### On-Device Chat
+- Tokens stream live as the model generates them
+- Replies are grounded in retrieved document context and cite which document a fact came from
+- Pick your model during onboarding — from a fast ~1 GB model up to sharper 3 B variants
+
+### Tool Calling → x402 Payments
+- The model can call tools mid-reply; `web_search` is registered as a *billed* tool
+- mlx-swift-lm's `ChatSession` drives the streaming tool-call loop natively — detect, dispatch, feed the result back, resume
+- The dispatch handler is the single seam where Tavily + x402 settlement plugs in *(currently stubbed)*
+
+### x402 Coinbase Wallet *(UI simulated today)*
+- Connect a Coinbase smart wallet in the UI — no terminal, no `.env`, no CLI
 - Wallet balance, spend history, and per-query cost visible at a glance
-- Set a spend ceiling per session — the agent will not exceed it
 
-### Core Loop — Agentic Research
-1. User submits a research query
-2. Gemma 4 checks local RAG documents first
-3. If local context is insufficient, the model decides to search the web
-4. x402 payment is authorized and sent to Tavily
-5. Results are returned and synthesized with local document context
-6. Final answer is grounded in both private and public sources, with citations
+---
+
+## Core Loop — Agentic Research
+
+1. User submits a query
+2. The on-device model loads (first run downloads the weights from Hugging Face)
+3. Local RAG retrieves the most relevant document chunks
+4. The model answers from local context — free and private — or decides it needs the web
+5. If so, it emits a `web_search` tool call; the handler settles an x402 payment and returns results *(next milestone)*
+6. The final answer is grounded in both private and public sources, with citations
 
 ---
 
@@ -62,26 +73,38 @@ With Local402, Gemma 4 processes everything on-device using Apple Silicon's Neur
 
 | Layer | Technology |
 |---|---|
-| Language | Swift |
+| Language | Swift 5 / Swift Concurrency |
 | Desktop framework | SwiftUI (macOS native) |
-| Local inference | Gemma 4 via MLX Swift / Core ML |
-| Local embeddings | On-device via Core ML |
-| Vector store | Swift-native local vector index |
-| Web search | Tavily API |
-| Payment rail | x402 + Coinbase AgentKit |
-| Wallet auth | Coinbase Smart Wallet (in-app, no terminal) |
-| Networking | Swift Concurrency (async/await) |
+| Local inference | MLX via [`mlx-swift-lm`](https://github.com/ml-explore/mlx-swift-lm) |
+| Models | `mlx-community` 4-bit: Qwen2.5 1.5B/3B, Llama 3.2 1B/3B |
+| Tokenizer / chat templates | `swift-transformers` + `swift-jinja` |
+| Model download | `swift-huggingface` (Hugging Face Hub) |
+| Local embeddings | Apple `NaturalLanguage` (`NLEmbedding`) |
+| Vector store | SQLite-backed local vector index (cosine similarity) |
+| Tool calling | Native function calling via `ChatSession` |
+| Payment rail | x402 + Coinbase AgentKit *(in progress)* |
+| Web search | Tavily API *(in progress)* |
+
+---
+
+## Architecture
+
+The integration seam is small and deliberate:
+
+- **`LLM/LLMEngine.swift`** — an `actor` that downloads/loads an MLX model and runs a tool-enabled `ChatSession`, exposing replies as an `AsyncThrowingStream<String, Error>`.
+- **`LLM/AgentTool.swift`** — the tool registry. `web_search` is defined here; this is where paid tools land.
+- **`State/LLMStore.swift`** — `@MainActor` bridge owning the download → load → ready lifecycle for the UI.
+- **`RAG/RAGEngine.swift`** — an `actor` running extract → chunk → embed → store → search.
+- **`State/ChatStore.swift`** — ties them together: retrieve context, stream the reply, dispatch tools.
 
 ---
 
 ## Why Swift
 
-Swift is the natural choice for a privacy-first macOS application:
-
-- **Apple Silicon performance** — Gemma 4 runs on the Neural Engine via MLX Swift or Core ML, extracting maximum performance from M-series chips with minimal battery impact
-- **Native privacy APIs** — macOS sandboxing, entitlements, and the Secure Enclave are first-class citizens in Swift, not afterthoughts
-- **No runtime dependencies** — a Swift app ships as a self-contained binary. No Python environment, no Node runtime, no Docker container for the user to manage
-- **SwiftUI** — declarative UI that makes the three-panel layout (documents, chat, wallet) clean to build and easy to maintain
+- **Apple Silicon performance** — MLX runs the model on the GPU via Metal, extracting maximum performance from M-series chips
+- **Native privacy APIs** — macOS sandboxing, entitlements, and the Secure Enclave are first-class
+- **No runtime dependencies** — ships as a self-contained binary; no Python, Node, or Docker for the user to manage
+- **SwiftUI** — declarative UI that keeps the documents / chat / wallet layout clean
 
 ---
 
@@ -89,29 +112,21 @@ Swift is the natural choice for a privacy-first macOS application:
 
 Local402 operates on a **minimal disclosure principle**:
 
-- **Documents** — chunked, embedded, and stored in a local vector index. Never transmitted.
-- **Reasoning** — Gemma 4's chain of thought runs entirely in device memory via MLX. Never transmitted.
-- **Queries** — only the final, sanitized search string leaves the machine. Transmitted to Tavily, paid via x402.
+- **Documents** — chunked, embedded, and stored in a local SQLite vector index. Never transmitted.
+- **Reasoning** — the model's full generation runs in device memory via MLX. Never transmitted.
+- **Queries** — only a final, deliberate search string leaves the machine, as a tool call paid via x402.
 - **Wallet** — managed client-side via Coinbase Smart Wallet. No private keys handled by the app.
 
-This makes Local402 suitable for use cases where data residency matters: legal research, financial analysis, healthcare, and internal business intelligence.
-
----
-
-## Who It's For
-
-- **Enterprises** that need agentic AI over internal documents but cannot use hosted models due to compliance requirements
-- **Developers and researchers** who want a self-sovereign AI research loop with no provider dependency
-- **Privacy-conscious individuals** who don't want a third-party provider logging what their AI is researching
-- **Teams in regulated industries** — legal, finance, healthcare — where data leaving the building is a contractual or regulatory issue
+Suitable for use cases where data residency matters: legal research, financial analysis, healthcare, and internal business intelligence.
 
 ---
 
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- Apple Silicon (M1 or later) recommended for Gemma 4 inference performance
-- Coinbase Smart Wallet account for x402 payments
+- **Apple Silicon (M1 or later)** — required; MLX inference uses the Metal GPU
+- ~1–2 GB free disk for the model weights (downloaded once, on first chat)
+- Coinbase Smart Wallet account for x402 payments *(when that milestone lands)*
 
 ---
 
@@ -121,24 +136,24 @@ This makes Local402 suitable for use cases where data residency matters: legal r
 # Clone the repo
 git clone https://github.com/your-org/local402
 
-# Open in Xcode
+# Open in Xcode (Swift packages resolve automatically)
 open Local402.xcodeproj
 ```
 
 On first launch:
-1. Connect your Coinbase wallet via the top-right wallet button
-2. Upload documents using the left panel
-3. Start a research session
+1. Pick a local model — it downloads from Hugging Face on first use
+2. Drop in PDFs to populate the local vector store
+3. Start chatting; the model grounds its answers in your documents
 
 ---
 
 ## Roadmap
 
-- [ ] Gemma 4 model variant selector (2B / 9B / 27B)
+- [ ] Wire `web_search` to Tavily and settle the call over x402
+- [ ] Surface model download/load progress in the chat UI
 - [ ] Multi-document citation with source highlighting in SwiftUI
-- [ ] Spend limit controls per session
+- [ ] Spend-limit controls per session
 - [ ] Export research sessions as PDF reports
-- [ ] iCloud Drive integration for document sync across devices
 - [ ] Team mode — shared local document store over LAN
 
 ---

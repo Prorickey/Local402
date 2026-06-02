@@ -2,8 +2,10 @@
 //  ChatStore.swift
 //  Local402
 //
-//  Observable chat state with a simulated, cancellable streaming reply that
-//  emits inline payment events and debits the shared WalletStore.
+//  Observable chat state. Streams real tokens from the on-device `LLMEngine`
+//  (via `LLMStore`). The model decides when to query the local RAG store (the
+//  `search_documents` tool); retrieved sources arrive as citations and are
+//  attached to the streaming message.
 //
 
 import Foundation
@@ -21,13 +23,14 @@ final class ChatStore {
     var modelName: String
 
     private let wallet: WalletStore
-    private var userTurns = 0
+    private let llm: LLMStore
     private var streamTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "tech.hiant.Local402", category: "ChatStore")
 
-    init(wallet: WalletStore, modelName: String) {
+    init(wallet: WalletStore, llm: LLMStore) {
         self.wallet = wallet
-        self.modelName = modelName
+        self.llm = llm
+        self.modelName = llm.modelName
         seedGreeting()
     }
 
@@ -37,17 +40,14 @@ final class ChatStore {
         messages = [ChatMessage(role: .assistant, segments: segments, timestamp: Date())]
     }
 
-    /// Sends the current draft (or a provided text), then streams a scripted reply.
+    /// Sends the current draft (or a provided text), then streams the model reply.
     func send(_ text: String? = nil) {
         let content = (text ?? draft).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, !isStreaming else { return }
 
         draft = ""
-        userTurns += 1
         messages.append(.text(content, role: .user, timestamp: Date()))
-
-        let beats = MockChat.reply(forUserTurn: userTurns)
-        startStreaming(beats: beats)
+        startStreaming(userText: content)
     }
 
     /// Cancels any in-flight streaming reply.
@@ -60,45 +60,39 @@ final class ChatStore {
         }
     }
 
-    private func startStreaming(beats: [ReplyBeat]) {
+    private func startStreaming(userText: String) {
         isStreaming = true
         let assistant = ChatMessage(role: .assistant, segments: [], timestamp: Date(), isStreaming: true)
         messages.append(assistant)
         let messageID = assistant.id
 
         streamTask = Task { [weak self] in
-            await self?.runStream(beats: beats, messageID: messageID)
+            await self?.runStream(userText: userText, messageID: messageID)
         }
     }
 
-    private func runStream(beats: [ReplyBeat], messageID: UUID) async {
-        // Brief "thinking" pause before the first token.
-        try? await Task.sleep(for: .milliseconds(450))
+    private func runStream(userText: String, messageID: UUID) async {
+        do {
+            // 1. Make sure the model is downloaded + loaded (idempotent).
+            try await llm.ensureReady()
 
-        for beat in beats {
-            if Task.isCancelled { break }
-
-            switch beat {
-            case .text(let chunk):
-                await streamText(chunk, into: messageID)
-            case .payment(let paymentBeat):
-                try? await Task.sleep(for: .milliseconds(500))
-                appendPayment(paymentBeat, into: messageID)
+            // 2. Stream tokens. The model may call search_documents / web_search
+            //    inside this stream; retrieved sources arrive as citations.
+            let stream = await llm.reply(userText: userText) { [weak self] citations in
+                Task { @MainActor in self?.attachCitations(citations, to: messageID) }
             }
+            for try await chunk in stream {
+                if Task.isCancelled { break }
+                appendText(chunk, into: messageID)
+            }
+        } catch is CancellationError {
+            // User stopped generation — keep whatever streamed so far.
+        } catch {
+            logger.error("LLM stream failed: \(error.localizedDescription, privacy: .public)")
+            appendText("\n\n⚠️ \(error.localizedDescription)", into: messageID)
         }
 
         finishStreaming(messageID: messageID)
-    }
-
-    /// Streams a text chunk word-by-word into the message's trailing text segment.
-    private func streamText(_ chunk: String, into messageID: UUID) async {
-        let words = chunk.split(separator: " ", omittingEmptySubsequences: false)
-        for (offset, word) in words.enumerated() {
-            if Task.isCancelled { return }
-            let piece = offset == 0 ? String(word) : " " + word
-            appendText(piece, into: messageID)
-            try? await Task.sleep(for: .milliseconds(28))
-        }
     }
 
     private func appendText(_ piece: String, into messageID: UUID) {
@@ -112,17 +106,14 @@ final class ChatStore {
         messages[index].segments = segments
     }
 
-    private func appendPayment(_ beat: PaymentBeat, into messageID: UUID) {
+    /// Adds newly retrieved sources to a message, de-duplicated by chunk id.
+    private func attachCitations(_ citations: [Citation], to messageID: UUID) {
         guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
-        let event = PaymentEvent(
-            amount: beat.amount,
-            label: beat.label,
-            resource: beat.resource,
-            timestamp: Date()
-        )
-        messages[index].segments.append(.payment(event))
-        wallet.recordPayment(event)
-        logger.debug("Agent paid \(event.amountLabel, privacy: .public) for \(event.label, privacy: .public)")
+        var merged = messages[index].citations
+        for citation in citations where !merged.contains(where: { $0.id == citation.id }) {
+            merged.append(citation)
+        }
+        messages[index].citations = merged
     }
 
     private func finishStreaming(messageID: UUID) {
@@ -133,7 +124,9 @@ final class ChatStore {
         streamTask = nil
     }
 
-    /// Builds segments from beats immediately (used for the non-streamed greeting).
+    /// Builds segments from scripted beats immediately (used for the greeting).
+    /// Retained for the payment-event seam: once paid tools settle over x402,
+    /// `.payment` segments will be emitted from tool results the same way.
     private static func segments(from beats: [ReplyBeat], wallet: WalletStore?, now: Date) -> [MessageSegment] {
         beats.map { beat in
             switch beat {

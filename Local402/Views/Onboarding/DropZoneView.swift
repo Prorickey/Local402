@@ -2,16 +2,16 @@
 //  DropZoneView.swift
 //  Local402
 //
-//  A dashed drop target for company files. Both tapping and dropping invoke
-//  `onDropFile`, which fabricates a mock file — the dropped item's contents
-//  are never read (the app is fully simulated and sandbox-safe).
+//  A dashed drop target for company documents. Tapping opens a file browser;
+//  dropping real PDF file URLs hands them to `onDropURLs` for on-device
+//  ingestion into the vector store.
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct DropZoneView: View {
-    let onDropFile: () -> Void
+    var onBrowse: () -> Void
+    var onDropURLs: ([URL]) -> Void
 
     @State private var isTargeted = false
     @State private var hovering = false
@@ -24,10 +24,10 @@ struct DropZoneView: View {
                 .scaleEffect(isTargeted ? 1.1 : 1)
 
             VStack(spacing: Theme.spacing.xs) {
-                Text("Drag files here or click to browse")
+                Text("Drag PDFs here or click to browse")
                     .font(Theme.font.headline)
                     .foregroundStyle(Theme.color.textPrimary)
-                Text("PDFs, spreadsheets, docs — anything your agents should know about.")
+                Text("Each PDF is parsed, chunked, and embedded on-device — nothing leaves your machine.")
                     .font(Theme.font.callout)
                     .foregroundStyle(Theme.color.textSecondary)
                     .multilineTextAlignment(.center)
@@ -42,17 +42,19 @@ struct DropZoneView: View {
         )
         .overlay(border)
         .contentShape(Rectangle())
-        .onTapGesture(perform: onDropFile)
+        .onTapGesture(perform: onBrowse)
         .onHover { hovering = $0 }
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted.animation(.easeInOut(duration: 0.15))) { _ in
-            // Intentionally ignore the dropped providers: this flow is simulated
-            // and must never read disk. Fabricate a mock file instead.
-            onDropFile()
+        .dropDestination(for: URL.self) { urls, _ in
+            let pdfs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+            guard !pdfs.isEmpty else { return false }
+            onDropURLs(pdfs)
             return true
+        } isTargeted: { targeted in
+            isTargeted = targeted
         }
         .animation(.easeInOut(duration: 0.15), value: isTargeted)
         .animation(.easeInOut(duration: 0.15), value: hovering)
-        .help("Add a file to your agent's context")
+        .help("Add a PDF to your agent's context")
     }
 
     private var border: some View {
@@ -72,7 +74,7 @@ struct DropZoneView: View {
 #Preview {
     ZStack {
         Theme.color.background.ignoresSafeArea()
-        DropZoneView {}
+        DropZoneView(onBrowse: {}, onDropURLs: { _ in })
             .padding(Theme.spacing.xl)
     }
     .frame(width: 560, height: 260)
