@@ -2,14 +2,17 @@
 //  PaymentRow.swift
 //  Local402
 //
-//  A single row in the recent-payments list: leading payment icon, label and
-//  resource, trailing amount in green with a relative timestamp.
+//  A single row in the recent-payments list: leading circular payment icon,
+//  label and monospaced resource, trailing green amount with a relative
+//  timestamp, and a subtle desktop hover highlight.
 //
 
 import SwiftUI
 
 struct PaymentRow: View {
     let payment: PaymentEvent
+
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: Theme.spacing.md) {
@@ -36,7 +39,15 @@ struct PaymentRow: View {
                     .foregroundStyle(Theme.color.textTertiary)
             }
         }
-        .padding(.vertical, Theme.spacing.xs)
+        .padding(.vertical, Theme.spacing.sm)
+        .padding(.horizontal, Theme.spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                .fill(Theme.color.surfaceElevated.opacity(hovering ? 0.6 : 0))
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
         .help("x402 payment to \(payment.resource)")
     }
 

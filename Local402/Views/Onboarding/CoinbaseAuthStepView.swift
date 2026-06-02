@@ -20,12 +20,14 @@ struct CoinbaseAuthStepView: View {
             VStack(spacing: Theme.spacing.lg) {
                 CoinbaseLogoMark()
                     .frame(width: 56, height: 56)
+                    .shadow(color: Theme.color.accent.opacity(0.35), radius: 12, y: 2)
 
                 content(for: onboarding.coinbase, connect: onboarding.connectCoinbase)
             }
             .frame(maxWidth: .infinity)
             .padding(Theme.spacing.xl)
-            .card(padding: Theme.spacing.xl, fill: Theme.color.surface)
+            .local402Acrylic(cornerRadius: Theme.radius.lg, appears: false)
+            .shadow(color: .black.opacity(0.22), radius: 10, y: 2)
             .animation(.easeInOut(duration: 0.25), value: onboarding.coinbase)
         }
     }
@@ -94,6 +96,10 @@ struct CoinbaseAuthStepView: View {
             .background(
                 RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
                     .fill(Theme.color.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                    .strokeBorder(Theme.color.surfaceStroke, lineWidth: 1)
             )
         }
     }

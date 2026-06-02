@@ -18,10 +18,15 @@ struct DropZoneView: View {
 
     var body: some View {
         VStack(spacing: Theme.spacing.md) {
-            Image(systemName: "arrow.up.doc.fill")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(isTargeted ? Theme.color.accentHover : Theme.color.accent)
-                .scaleEffect(isTargeted ? 1.1 : 1)
+            ZStack {
+                Circle()
+                    .fill(Theme.color.accent.opacity(isTargeted ? 0.22 : 0.12))
+                    .frame(width: 56, height: 56)
+                Image(systemName: "arrow.up.doc.fill")
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(LinearGradient.local402Flourish)
+            }
+            .scaleEffect(isTargeted ? 1.12 : 1)
 
             VStack(spacing: Theme.spacing.xs) {
                 Text("Drag files here or click to browse")
@@ -36,10 +41,8 @@ struct DropZoneView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.spacing.xxl)
         .padding(.horizontal, Theme.spacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-                .fill(isTargeted ? Theme.color.accent.opacity(0.08) : Theme.color.surface)
-        )
+        .local402Acrylic(cornerRadius: Theme.radius.lg, appears: false)
+        .overlay(highlightWash)
         .overlay(border)
         .contentShape(Rectangle())
         .onTapGesture(perform: onDropFile)
@@ -55,9 +58,15 @@ struct DropZoneView: View {
         .help("Add a file to your agent's context")
     }
 
+    /// A faint accent wash that brightens when a drag is over the zone.
+    private var highlightWash: some View {
+        RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
+            .fill(Theme.color.accent.opacity(isTargeted ? 0.1 : 0))
+    }
+
     private var border: some View {
         RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-            .stroke(
+            .strokeBorder(
                 borderColor,
                 style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])
             )

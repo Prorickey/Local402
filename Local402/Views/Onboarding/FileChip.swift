@@ -16,9 +16,14 @@ struct FileChip: View {
 
     var body: some View {
         HStack(spacing: Theme.spacing.sm) {
-            Image(systemName: file.systemImage)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.color.accentHover)
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.radius.sm, style: .continuous)
+                    .fill(Theme.color.accent.opacity(0.15))
+                    .frame(width: 28, height: 28)
+                Image(systemName: file.systemImage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.color.accentHover)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(file.fileName)
@@ -39,19 +44,20 @@ struct FileChip: View {
                     .background(
                         Circle().fill(hovering ? Theme.color.surfaceStroke : .clear)
                     )
+                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(Local402PressableStyle())
             .help("Remove \(file.fileName)")
         }
         .padding(.vertical, Theme.spacing.sm)
         .padding(.horizontal, Theme.spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
-                .fill(Theme.color.surfaceElevated)
-        )
+        .local402Acrylic(cornerRadius: Theme.radius.md, appears: false)
         .overlay(
             RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
-                .stroke(Theme.color.surfaceStroke, lineWidth: 1)
+                .strokeBorder(
+                    hovering ? Theme.color.accent.opacity(0.4) : Theme.color.surfaceStroke,
+                    lineWidth: 1
+                )
         )
         .onHover { hovering = $0 }
         .animation(.easeInOut(duration: 0.15), value: hovering)

@@ -32,12 +32,24 @@ struct OnboardingProgressBar: View {
     private func node(for step: OnboardingStep) -> some View {
         let state = state(for: step)
         return ZStack {
+            // Soft accent halo around the current node.
+            if state == .current {
+                Circle()
+                    .fill(Theme.color.accent.opacity(0.18))
+                    .frame(width: 36, height: 36)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
             Circle()
                 .fill(fill(for: state))
                 .frame(width: 26, height: 26)
                 .overlay(
                     Circle()
-                        .stroke(ring(for: state), lineWidth: state == .current ? 2 : 1)
+                        .strokeBorder(ring(for: state), lineWidth: state == .current ? 2 : 1)
+                )
+                .shadow(
+                    color: state == .completed ? Theme.color.accent.opacity(0.35) : .clear,
+                    radius: 4
                 )
 
             switch state {
@@ -52,15 +64,23 @@ struct OnboardingProgressBar: View {
                     .foregroundStyle(numberColor(for: state))
             }
         }
+        .frame(width: 36, height: 36)
         .accessibilityLabel(Text(step.title))
     }
 
     private func connector(after step: OnboardingStep) -> some View {
         let filled = step.rawValue < current.rawValue
         return Capsule()
-            .fill(filled ? Theme.color.accent : Theme.color.surfaceStroke)
+            .fill(Theme.color.surfaceStroke)
             .frame(height: 2)
             .frame(maxWidth: .infinity)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(LinearGradient.local402Flourish)
+                        .frame(width: filled ? proxy.size.width : 0)
+                }
+            }
     }
 
     // MARK: - State

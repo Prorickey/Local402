@@ -20,6 +20,10 @@ final class ChatStore {
     /// The agent's model name, shown in the greeting and header.
     var modelName: String
 
+    /// Spend posture for the agent: 0 Frugal, 1 Balanced, 2 Thorough.
+    /// Drives the Copilot-style spend-mode selector in the chat header.
+    var spendMode: Int = 1
+
     private let wallet: WalletStore
     private var userTurns = 0
     private var streamTask: Task<Void, Never>?

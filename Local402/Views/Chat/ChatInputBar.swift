@@ -2,8 +2,10 @@
 //  ChatInputBar.swift
 //  Local402
 //
-//  Bottom composer: a growing text field plus a circular send/stop button.
-//  Sends the draft on Enter or tap; shows a stop control while streaming.
+//  Bottom composer: a Copilot-style acrylic prompt bar with an animated accent
+//  focus ring, a leading "add context" button, a growing text field, and a
+//  circular send/stop button. Sends on Enter or ⌘↵; shows a stop control while
+//  streaming. See DESIGN.md §3.
 //
 
 import SwiftUI
@@ -12,18 +14,13 @@ struct ChatInputBar: View {
     @Environment(AppState.self) private var appState
 
     @FocusState private var isFocused: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         @Bindable var chat = appState.chat
 
         VStack(spacing: Theme.spacing.sm) {
-            Divider()
-                .overlay(Theme.color.surfaceStroke)
-
-            HStack(alignment: .bottom, spacing: Theme.spacing.md) {
-                field(draft: $chat.draft)
-                actionButton
-            }
+            promptBar(draft: $chat.draft)
 
             Text("Agents weigh cost before every paid call.")
                 .font(Theme.font.caption)
@@ -31,30 +28,72 @@ struct ChatInputBar: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
         .padding(Theme.spacing.lg)
+        .frame(maxWidth: Self.maxWidth)
+        .frame(maxWidth: .infinity)
         .background(Theme.color.background)
     }
 
-    // MARK: - Text field
+    private static let maxWidth: CGFloat = 760
 
-    private func field(draft: Binding<String>) -> some View {
-        TextField("Message Local402…", text: draft, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(Theme.font.body)
-            .foregroundStyle(Theme.color.textPrimary)
-            .tint(Theme.color.accent)
-            .lineLimit(1...6)
-            .focused($isFocused)
-            .onSubmit(submit)
-            .padding(.vertical, Theme.spacing.md)
-            .padding(.horizontal, Theme.spacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-                    .fill(Theme.color.surfaceElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-                    .stroke(Theme.color.surfaceStroke, lineWidth: 1)
-            )
+    // MARK: - Prompt bar
+
+    private func promptBar(draft: Binding<String>) -> some View {
+        HStack(spacing: Theme.spacing.md) {
+            iconButton("plus", help: "Add context") { }
+
+            TextField("Message Local402", text: draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(Theme.font.body)
+                .foregroundStyle(Theme.color.textPrimary)
+                .tint(Theme.color.accent)
+                .lineLimit(1...6)
+                .focused($isFocused)
+                .onSubmit(submit)
+
+            actionButton
+        }
+        .padding(.horizontal, Theme.spacing.lg)
+        .padding(.vertical, Theme.spacing.sm)
+        .frame(minHeight: 52)
+        .background(promptSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius.xl, style: .continuous)
+                .strokeBorder(
+                    isFocused ? Theme.color.accent : Theme.color.surfaceStroke,
+                    lineWidth: isFocused ? 1.5 : 1
+                )
+                .animation(.easeOut(duration: 0.18), value: isFocused)
+        )
+        // ⌘↵ always sends, even mid-edit.
+        .background(
+            Button("", action: submit)
+                .keyboardShortcut(.return, modifiers: .command)
+                .hidden()
+        )
+    }
+
+    @ViewBuilder private var promptSurface: some View {
+        if reduceTransparency {
+            Theme.color.surfaceElevated
+        } else {
+            ZStack {
+                Rectangle().fill(.regularMaterial)
+                Theme.color.surfaceElevated.opacity(0.6)
+            }
+        }
+    }
+
+    // MARK: - Leading icon button
+
+    private func iconButton(_ name: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: name)
+                .font(.system(size: 20))
+                .foregroundStyle(Theme.color.textSecondary)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     // MARK: - Send / Stop button
@@ -62,34 +101,29 @@ struct ChatInputBar: View {
     @ViewBuilder
     private var actionButton: some View {
         if appState.chat.isStreaming {
-            circularButton(systemImage: "stop.fill", fill: Theme.color.surfaceElevated) {
-                appState.chat.cancelStreaming()
+            Button(action: appState.chat.cancelStreaming) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Theme.color.accent))
             }
+            .buttonStyle(.plain)
+            .help("Stop generating")
             .accessibilityLabel("Stop generating")
         } else {
-            circularButton(
-                systemImage: "arrow.up",
-                fill: canSend ? Theme.color.accent : Theme.color.surfaceElevated,
-                action: submit
-            )
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(canSend ? .white : Theme.color.textTertiary)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(canSend ? Theme.color.accent : Color.clear))
+            }
+            .buttonStyle(.plain)
             .disabled(!canSend)
+            .help("Send")
             .accessibilityLabel("Send message")
         }
-    }
-
-    private func circularButton(
-        systemImage: String,
-        fill: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(fill))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
@@ -115,6 +149,6 @@ struct ChatInputBar: View {
         }
     }
     .environment(AppState())
-    .frame(width: 640, height: 220)
+    .frame(width: 720, height: 220)
     .preferredColorScheme(.dark)
 }

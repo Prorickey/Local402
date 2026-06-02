@@ -22,6 +22,7 @@ struct Local402App: App {
                 .environment(appState)
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 1000, height: 720)
+        .defaultSize(width: 1100, height: 760)
+        .windowResizability(.contentMinSize)
     }
 }

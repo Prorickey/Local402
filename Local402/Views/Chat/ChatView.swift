@@ -2,8 +2,9 @@
 //  ChatView.swift
 //  Local402
 //
-//  The chat surface: a scrolling message list above a pinned input composer,
-//  with a friendly empty state when no messages exist yet.
+//  The chat surface: a slim Copilot-style header, a scrolling message list, and
+//  a pinned acrylic prompt bar, with a friendly empty state when no messages
+//  exist yet. See DESIGN.md §3–§5.
 //
 
 import SwiftUI
@@ -12,7 +13,14 @@ struct ChatView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
+        @Bindable var chat = appState.chat
+
         VStack(spacing: 0) {
+            header(spendMode: $chat.spendMode)
+
+            Divider()
+                .overlay(Theme.color.surfaceStroke)
+
             if appState.chat.messages.isEmpty {
                 emptyState
             } else {
@@ -25,15 +33,38 @@ struct ChatView: View {
         .background(Theme.color.background)
     }
 
+    // MARK: - Header
+
+    private func header(spendMode: Binding<Int>) -> some View {
+        HStack(spacing: Theme.spacing.md) {
+            Local402Flourish(size: 16)
+
+            Text("Local402")
+                .font(Theme.font.headline)
+                .foregroundStyle(Theme.color.textPrimary)
+
+            Text(appState.chat.modelName)
+                .font(Theme.font.callout)
+                .foregroundStyle(Theme.color.textSecondary)
+                .lineLimit(1)
+
+            Spacer(minLength: Theme.spacing.lg)
+
+            Local402SpendMode(selection: spendMode)
+                .frame(maxWidth: 280)
+        }
+        .padding(.horizontal, Theme.spacing.lg)
+        .padding(.vertical, Theme.spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: - Empty state
 
     private var emptyState: some View {
         VStack(spacing: Theme.spacing.md) {
             Spacer()
 
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 42, weight: .light))
-                .foregroundStyle(Theme.color.accent.opacity(0.8))
+            Local402Flourish(size: 42)
 
             Text("Start a conversation")
                 .font(Theme.font.title)
@@ -54,6 +85,6 @@ struct ChatView: View {
 #Preview {
     ChatView()
         .environment(AppState())
-        .frame(width: 720, height: 640)
+        .frame(width: 760, height: 640)
         .preferredColorScheme(.dark)
 }

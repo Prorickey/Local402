@@ -2,17 +2,23 @@
 //  AppTopBar.swift
 //  Local402
 //
-//  The in-app top bar: branding + chat affordance on the left, Wallet and
-//  Settings tab buttons on the right.
+//  The in-app top bar: a history toggle and brand lockup on the left, Wallet
+//  and Settings tab buttons on the right. Acrylic Fluent chrome over the navy
+//  canvas, honoring Reduce Transparency. See DESIGN.md §5.
 //
 
 import SwiftUI
 
 struct AppTopBar: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    /// Owned by `MainView`; toggles the chat-history sidebar.
+    @Binding var historyOpen: Bool
 
     var body: some View {
         HStack(spacing: Theme.spacing.md) {
+            historyToggle
             brand
             Spacer(minLength: Theme.spacing.lg)
             ForEach(AppTab.secondaryTabs, id: \.self) { tab in
@@ -27,12 +33,40 @@ struct AppTopBar: View {
         }
         .padding(.horizontal, Theme.spacing.xl)
         .padding(.vertical, Theme.spacing.md)
-        .background(Theme.color.surface.opacity(0.6))
+        .background(chrome)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Theme.color.surfaceStroke)
                 .frame(height: 1)
         }
+    }
+
+    /// Acrylic chrome — frosted material over navy, solid fallback for
+    /// Reduce Transparency so text keeps contrast.
+    @ViewBuilder private var chrome: some View {
+        if reduceTransparency {
+            Theme.color.surface
+        } else {
+            ZStack {
+                Rectangle().fill(.regularMaterial)
+                Theme.color.surface.opacity(0.55)
+            }
+        }
+    }
+
+    private var historyToggle: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.25)) { historyOpen.toggle() }
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 18))
+                .foregroundStyle(Theme.color.textSecondary)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Toggle chat history")
+        .keyboardShortcut("\\", modifiers: .command)
     }
 
     private var brand: some View {
@@ -48,6 +82,7 @@ struct AppTopBar: View {
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                 }
+                Local402Flourish(size: 24)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Local402")
                         .font(Theme.font.headline)
@@ -105,7 +140,7 @@ private struct TopBarTabButton: View {
     ZStack {
         Theme.color.background.ignoresSafeArea()
         VStack {
-            AppTopBar()
+            AppTopBar(historyOpen: .constant(true))
             Spacer()
         }
     }

@@ -14,9 +14,7 @@ struct WalletView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.spacing.xl) {
-                Text("Wallet")
-                    .font(Theme.font.title)
-                    .foregroundStyle(Theme.color.textPrimary)
+                title
 
                 BalanceCard(
                     wallet: appState.wallet.wallet,
@@ -37,6 +35,15 @@ struct WalletView: View {
     }
 
     // MARK: - Sections
+
+    private var title: some View {
+        HStack(spacing: Theme.spacing.sm) {
+            Local402Flourish(size: 20)
+            Text("Wallet")
+                .font(Theme.font.title)
+                .foregroundStyle(Theme.color.textPrimary)
+        }
+    }
 
     private var recentPayments: some View {
         SectionCard("Recent payments") {

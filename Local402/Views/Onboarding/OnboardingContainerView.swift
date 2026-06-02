@@ -12,7 +12,7 @@ import SwiftUI
 struct OnboardingContainerView: View {
     @Environment(AppState.self) private var appState
 
-    private let columnWidth: CGFloat = 560
+    private let columnWidth: CGFloat = 580
 
     var body: some View {
         let onboarding = appState.onboarding
@@ -51,12 +51,11 @@ struct OnboardingContainerView: View {
     private func header(step: OnboardingStep) -> some View {
         VStack(spacing: Theme.spacing.lg) {
             HStack(spacing: Theme.spacing.sm) {
-                Image(systemName: "bolt.shield.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Theme.color.accent)
+                Local402Flourish(size: 18)
                 Text("Local402")
                     .font(Theme.font.headline)
                     .foregroundStyle(Theme.color.textPrimary)
+                    .tracking(0.3)
             }
 
             OnboardingProgressBar(current: step)
@@ -98,12 +97,7 @@ struct OnboardingContainerView: View {
                     .transition(.opacity)
             }
 
-            Button("Skip for now") {
-                appState.completeOnboarding()
-            }
-            .buttonStyle(.plain)
-            .font(Theme.font.callout)
-            .foregroundStyle(Theme.color.textTertiary)
+            SkipButton { appState.completeOnboarding() }
 
             Spacer()
 
@@ -115,6 +109,7 @@ struct OnboardingContainerView: View {
             )
             .frame(maxWidth: 200)
         }
+        .padding(.top, Theme.spacing.sm)
     }
 
     private func continueTitle(for step: OnboardingStep) -> String {
@@ -126,21 +121,45 @@ struct OnboardingContainerView: View {
     }
 }
 
+// MARK: - Skip text button
+
+/// A muted, hover-aware "Skip for now" text button used in the bottom nav.
+private struct SkipButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button("Skip for now", action: action)
+            .buttonStyle(.plain)
+            .font(Theme.font.callout)
+            .foregroundStyle(hovering ? Theme.color.textSecondary : Theme.color.textTertiary)
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.15), value: hovering)
+            .help("Skip onboarding and enter Local402")
+    }
+}
+
 // MARK: - Shared step header
 
-/// Title + subtitle block shown at the top of each onboarding step body.
+/// Title + subtitle block shown at the top of each onboarding step body, with a
+/// leading flourish accent for the Copilot-style brand gesture.
 struct OnboardingStepHeader: View {
     let step: OnboardingStep
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing.xs) {
-            Text(step.title)
-                .font(Theme.font.title)
-                .foregroundStyle(Theme.color.textPrimary)
-            Text(step.subtitle)
-                .font(Theme.font.body)
-                .foregroundStyle(Theme.color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .firstTextBaseline, spacing: Theme.spacing.md) {
+            Local402Flourish(size: 22)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 4 }
+
+            VStack(alignment: .leading, spacing: Theme.spacing.xs) {
+                Text(step.title)
+                    .font(Theme.font.title)
+                    .foregroundStyle(Theme.color.textPrimary)
+                Text(step.subtitle)
+                    .font(Theme.font.body)
+                    .foregroundStyle(Theme.color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

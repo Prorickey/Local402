@@ -22,9 +22,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.spacing.xl) {
-                Text("Settings")
-                    .font(Theme.font.title)
-                    .foregroundStyle(Theme.color.textPrimary)
+                title
 
                 modelSection
                 companyDataSection
@@ -37,6 +35,17 @@ struct SettingsView: View {
         .background(Theme.color.background)
     }
 
+    // MARK: - Title
+
+    private var title: some View {
+        HStack(spacing: Theme.spacing.sm) {
+            Local402Flourish(size: 20)
+            Text("Settings")
+                .font(Theme.font.title)
+                .foregroundStyle(Theme.color.textPrimary)
+        }
+    }
+
     // MARK: - Model
 
     private var modelSection: some View {
@@ -45,7 +54,8 @@ struct SettingsView: View {
                 SettingsRow(
                     title: appState.selectedModelName,
                     subtitle: modelSubtitle,
-                    systemImage: "cpu"
+                    systemImage: "cpu",
+                    help: "Active on-device model"
                 ) {
                     if let model = appState.onboarding.selectedModel {
                         Text(model.sizeLabel)
@@ -53,6 +63,27 @@ struct SettingsView: View {
                             .foregroundStyle(Theme.color.textSecondary)
                             .monospacedDigit()
                     }
+                }
+
+                if let model = appState.onboarding.selectedModel {
+                    divider
+                    SettingsRow(
+                        title: "Parameters",
+                        systemImage: "number.square",
+                        value: model.parameters
+                    )
+                    divider
+                    SettingsRow(
+                        title: "On-disk size",
+                        systemImage: "internaldrive",
+                        value: model.sizeLabel
+                    )
+                    divider
+                    SettingsRow(
+                        title: "Recommended RAM",
+                        systemImage: "memorychip",
+                        value: model.ramLabel
+                    )
                 }
             }
         }
@@ -123,10 +154,15 @@ struct SettingsView: View {
                 SettingsRow(
                     title: "Address",
                     systemImage: "number",
+                    help: appState.wallet.wallet.address,
                     value: appState.wallet.wallet.shortAddress
                 )
                 divider
-                SettingsRow(title: "Coinbase", systemImage: "link") {
+                SettingsRow(
+                    title: "Coinbase",
+                    systemImage: "link",
+                    help: coinbaseStatusText
+                ) {
                     coinbaseStatus
                 }
             }
@@ -135,6 +171,8 @@ struct SettingsView: View {
 
     private var coinbaseStatus: some View {
         let connected = appState.onboarding.coinbase == .connected
+        let tint = connected ? Theme.color.paymentGreen : Theme.color.textSecondary
+        let soft = connected ? Theme.color.paymentGreenSoft : Theme.color.surfaceElevated
         return HStack(spacing: Theme.spacing.xs) {
             Circle()
                 .fill(connected ? Theme.color.paymentGreen : Theme.color.textTertiary)
@@ -142,7 +180,11 @@ struct SettingsView: View {
             Text(coinbaseStatusText)
                 .font(Theme.font.callout)
         }
-        .foregroundStyle(connected ? Theme.color.paymentGreen : Theme.color.textSecondary)
+        .foregroundStyle(tint)
+        .padding(.vertical, Theme.spacing.xs)
+        .padding(.horizontal, Theme.spacing.sm)
+        .background(Capsule().fill(soft))
+        .overlay(Capsule().stroke(tint.opacity(0.35), lineWidth: 1))
     }
 
     private var coinbaseStatusText: String {
@@ -161,7 +203,8 @@ struct SettingsView: View {
                 SettingsRow(
                     title: "Show cost pills",
                     subtitle: "Display inline x402 payment badges in chat",
-                    systemImage: "creditcard"
+                    systemImage: "creditcard",
+                    help: "Toggle inline x402 payment badges"
                 ) {
                     Toggle("", isOn: $showCostPills)
                         .labelsHidden()
@@ -172,7 +215,8 @@ struct SettingsView: View {
                 SettingsRow(
                     title: "Notifications",
                     subtitle: "Notify on completed agent runs",
-                    systemImage: "bell"
+                    systemImage: "bell",
+                    help: "Toggle run-completion notifications"
                 ) {
                     Toggle("", isOn: $notificationsEnabled)
                         .labelsHidden()
@@ -192,17 +236,12 @@ struct SettingsView: View {
     }
 
     private var rerunOnboardingButton: some View {
-        Button {
+        PrimaryButton(title: "Re-run Onboarding", systemImage: "arrow.counterclockwise") {
             Self.logger.info("Re-run onboarding requested")
             appState.restartOnboarding()
-        } label: {
-            HStack(spacing: Theme.spacing.sm) {
-                Image(systemName: "arrow.counterclockwise")
-                Text("Re-run Onboarding")
-            }
         }
-        .buttonStyle(SecondaryButtonStyle())
-        .padding(.top, Theme.spacing.sm)
+        .help("Restart the setup flow from the beginning")
+        .padding(.top, Theme.spacing.md)
     }
 
     // MARK: - Shared

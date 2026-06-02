@@ -2,8 +2,10 @@
 //  BalanceCard.swift
 //  Local402
 //
-//  Prominent wallet balance card: large balance figure, total spent, a
-//  compact "Add funds" affordance, and a Coinbase connection status pill.
+//  Prominent wallet balance hero card with Fluent acrylic surface: a thin
+//  "value" accent strip, a large hero balance figure, the green Coinbase
+//  connection pill, a total-spent row, and an "Add funds" affordance whose
+//  fill uses the local402Value money gradient. See DESIGN.md.
 //
 
 import SwiftUI
@@ -13,25 +15,35 @@ struct BalanceCard: View {
     let wallet: WalletInfo
     let totalSpentLabel: String
 
+    @State private var addFundsHovering = false
+
     private static let logger = Logger(subsystem: "Local402", category: "BalanceCard")
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing.lg) {
-            header
-            balance
-            Divider()
-                .overlay(Theme.color.surfaceStroke)
-            footer
+        VStack(alignment: .leading, spacing: 0) {
+            valueStrip
+            VStack(alignment: .leading, spacing: Theme.spacing.lg) {
+                header
+                balance
+                Divider()
+                    .overlay(Theme.color.surfaceStroke)
+                footer
+            }
+            .padding(Theme.spacing.xl)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card(padding: Theme.spacing.xl)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-                .stroke(borderGradient, lineWidth: 1)
-        )
+        .local402Acrylic(cornerRadius: Theme.radius.lg)
+        .shadow(color: .black.opacity(0.25), radius: 10, y: 2)
     }
 
     // MARK: - Sections
+
+    /// Thin top accent strip — a tasteful "money" cue using the value gradient.
+    private var valueStrip: some View {
+        LinearGradient.local402Value
+            .frame(height: 3)
+            .frame(maxWidth: .infinity)
+    }
 
     private var header: some View {
         HStack {
@@ -105,10 +117,20 @@ struct BalanceCard: View {
             .padding(.horizontal, Theme.spacing.lg)
             .background(
                 RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
-                    .fill(Theme.color.accent)
+                    .fill(LinearGradient.local402Value)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                    .strokeBorder(Color.white.opacity(addFundsHovering ? 0.35 : 0), lineWidth: 1)
+            )
+            .brightness(addFundsHovering ? 0.06 : 0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Local402PressableStyle())
+        .onHover { hovering in
+            addFundsHovering = hovering
+            if hovering { Self.logger.debug("Add funds hover") }
+        }
+        .animation(.easeOut(duration: 0.15), value: addFundsHovering)
         .help("Add funds to your wallet")
     }
 
@@ -116,17 +138,6 @@ struct BalanceCard: View {
 
     private var amountString: String {
         WalletInfo.balanceFormatter.string(from: wallet.balance as NSDecimalNumber) ?? "0.00"
-    }
-
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Theme.color.accent.opacity(0.55),
-                Theme.color.surfaceStroke.opacity(0.2)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 }
 

@@ -10,6 +10,7 @@ import SwiftUI
 
 struct OnboardingCompleteView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var appeared = false
 
@@ -39,14 +40,19 @@ struct OnboardingCompleteView: View {
             PrimaryButton(title: "Enter Local402", systemImage: "arrow.right") {
                 appState.completeOnboarding()
             }
+            .frame(maxWidth: 240)
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 12)
         }
         .frame(maxWidth: .infinity)
         .multilineTextAlignment(.center)
         .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.7)) {
+            if reduceMotion {
                 appeared = true
+            } else {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.7)) {
+                    appeared = true
+                }
             }
         }
     }
@@ -57,19 +63,18 @@ struct OnboardingCompleteView: View {
         ZStack {
             Circle()
                 .fill(Theme.color.paymentGreenSoft)
-                .frame(width: 96, height: 96)
+                .frame(width: 104, height: 104)
             Circle()
-                .stroke(Theme.color.paymentGreen.opacity(0.4), lineWidth: 1)
-                .frame(width: 96, height: 96)
+                .strokeBorder(Theme.color.paymentGreen.opacity(0.4), lineWidth: 1)
+                .frame(width: 104, height: 104)
             Image(systemName: "checkmark")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 42, weight: .bold))
                 .foregroundStyle(Theme.color.paymentGreen)
         }
+        .shadow(color: Theme.color.paymentGreen.opacity(0.3), radius: 16, y: 4)
         .overlay(alignment: .topTrailing) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 20))
-                .foregroundStyle(Theme.color.accentHover)
-                .offset(x: 6, y: -2)
+            Local402Flourish(size: 28)
+                .offset(x: 10, y: -4)
         }
     }
 
@@ -96,7 +101,9 @@ struct OnboardingCompleteView: View {
             )
         }
         .padding(Theme.spacing.lg)
-        .card(fill: Theme.color.surface)
+        .local402Acrylic(cornerRadius: Theme.radius.lg, appears: false)
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 2)
+        .frame(maxWidth: 360)
     }
 
     private func recapRow(systemImage: String, label: String, value: String) -> some View {

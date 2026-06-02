@@ -13,6 +13,8 @@ struct WalletFundingStepView: View {
     @Environment(AppState.self) private var appState
     @Bindable var onboarding: OnboardingState
 
+    @FocusState private var amountFocused: Bool
+
     private static let quickPicks: [Decimal] = [10, 25, 50, 100]
 
     init(onboarding: OnboardingState) {
@@ -28,7 +30,8 @@ struct WalletFundingStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(Theme.spacing.xl)
-            .card(padding: Theme.spacing.xl, fill: Theme.color.surface)
+            .local402Acrylic(cornerRadius: Theme.radius.lg, appears: false)
+            .shadow(color: .black.opacity(0.22), radius: 10, y: 2)
             .animation(.easeInOut(duration: 0.25), value: onboarding.funding)
         }
     }
@@ -86,6 +89,7 @@ struct WalletFundingStepView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize()
                     .monospacedDigit()
+                    .focused($amountFocused)
                 Text("USDC")
                     .font(Theme.font.callout)
                     .foregroundStyle(Theme.color.textTertiary)
@@ -99,8 +103,12 @@ struct WalletFundingStepView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
-                    .stroke(Theme.color.surfaceStroke, lineWidth: 1)
+                    .strokeBorder(
+                        amountFocused ? Theme.color.accent : Theme.color.surfaceStroke,
+                        lineWidth: amountFocused ? 1.5 : 1
+                    )
             )
+            .animation(.easeOut(duration: 0.18), value: amountFocused)
         }
     }
 
@@ -123,16 +131,17 @@ struct WalletFundingStepView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.spacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                    Capsule()
                         .fill(isSelected ? Theme.color.accent : Theme.color.surfaceElevated)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
-                        .stroke(isSelected ? Theme.color.accent : Theme.color.surfaceStroke, lineWidth: 1)
+                    Capsule()
+                        .strokeBorder(isSelected ? Theme.color.accent : Theme.color.surfaceStroke, lineWidth: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Local402PressableStyle())
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .help("Set starting balance to \(quickLabel(amount))")
     }
 
     // MARK: - Confirming
@@ -161,6 +170,10 @@ struct WalletFundingStepView: View {
                     .font(Theme.font.headline)
                     .foregroundStyle(Theme.color.paymentGreen)
             }
+            .padding(.vertical, Theme.spacing.sm)
+            .padding(.horizontal, Theme.spacing.lg)
+            .background(Capsule().fill(Theme.color.paymentGreenSoft))
+            .overlay(Capsule().strokeBorder(Theme.color.paymentGreen.opacity(0.3), lineWidth: 1))
             .transition(.scale.combined(with: .opacity))
 
             Text("Settled via Coinbase")
@@ -196,6 +209,10 @@ struct WalletFundingStepView: View {
             .background(
                 RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
                     .fill(Theme.color.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                    .strokeBorder(Theme.color.surfaceStroke, lineWidth: 1)
             )
         }
     }

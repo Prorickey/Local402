@@ -4,6 +4,7 @@
 //
 //  Displays the wallet address (truncated) with a copy-to-pasteboard button
 //  that copies the full address and shows a transient "Copied!" confirmation.
+//  Rendered on a Fluent acrylic surface with desktop hover affordances.
 //
 
 import SwiftUI
@@ -15,6 +16,7 @@ struct WalletAddressRow: View {
     let shortAddress: String
 
     @State private var didCopy = false
+    @State private var rowHovering = false
 
     private static let logger = Logger(subsystem: "Local402", category: "WalletAddressRow")
     private static let copiedResetDelay: Duration = .milliseconds(1500)
@@ -26,6 +28,8 @@ struct WalletAddressRow: View {
                 Text("Wallet address")
                     .font(Theme.font.caption)
                     .foregroundStyle(Theme.color.textTertiary)
+                    .tracking(0.6)
+                    .textCase(.uppercase)
                 Text(shortAddress)
                     .font(Theme.font.mono)
                     .foregroundStyle(Theme.color.textPrimary)
@@ -34,7 +38,14 @@ struct WalletAddressRow: View {
             Spacer()
             copyButton
         }
-        .card()
+        .padding(Theme.spacing.lg)
+        .local402Acrylic(cornerRadius: Theme.radius.lg)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
+                .strokeBorder(Theme.color.accent.opacity(rowHovering ? 0.35 : 0), lineWidth: 1)
+        )
+        .onHover { rowHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: rowHovering)
     }
 
     // MARK: - Components
@@ -69,9 +80,9 @@ struct WalletAddressRow: View {
                     .stroke(didCopy ? Theme.color.paymentGreen.opacity(0.4) : Theme.color.surfaceStroke, lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Local402PressableStyle())
         .disabled(address.isEmpty)
-        .help("Copy full wallet address")
+        .help("Copy address")
         .animation(.easeOut(duration: 0.15), value: didCopy)
     }
 

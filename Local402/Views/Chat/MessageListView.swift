@@ -13,10 +13,13 @@ struct MessageListView: View {
 
     private static let bottomAnchor = "bottom"
 
+    /// Readable measure for the centered conversation column.
+    private static let readableWidth: CGFloat = 760
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Theme.spacing.lg) {
+                LazyVStack(alignment: .leading, spacing: Theme.spacing.xl) {
                     ForEach(messages) { message in
                         MessageBubble(message: message)
                             .id(message.id)
@@ -27,8 +30,10 @@ struct MessageListView: View {
                         .frame(height: 1)
                         .id(Self.bottomAnchor)
                 }
+                .frame(maxWidth: Self.readableWidth)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, Theme.spacing.xl)
-                .padding(.vertical, Theme.spacing.xl)
+                .padding(.vertical, Theme.spacing.xxl)
             }
             .onChange(of: messages.count) {
                 scrollToBottom(proxy)

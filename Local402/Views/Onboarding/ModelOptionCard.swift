@@ -35,10 +35,16 @@ struct ModelOptionCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Theme.spacing.lg)
-            .background(background)
+            .local402Acrylic(cornerRadius: Theme.radius.lg, appears: false)
             .overlay(border)
+            .shadow(
+                color: isSelected ? Theme.color.accent.opacity(0.25) : .black.opacity(0.18),
+                radius: isSelected ? 12 : 6,
+                y: 2
+            )
+            .scaleEffect(hovering && !isSelected ? 1.01 : 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(Local402PressableStyle())
         .onHover { hovering = $0 }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
         .animation(.easeInOut(duration: 0.2), value: hovering)
@@ -71,13 +77,16 @@ struct ModelOptionCard: View {
     }
 
     private var recommendedPill: some View {
-        Text("Recommended")
-            .font(Theme.font.caption)
-            .foregroundStyle(Theme.color.paymentGreen)
-            .padding(.vertical, 3)
-            .padding(.horizontal, Theme.spacing.sm)
-            .background(Capsule().fill(Theme.color.paymentGreenSoft))
-            .overlay(Capsule().stroke(Theme.color.paymentGreen.opacity(0.35), lineWidth: 1))
+        HStack(spacing: Theme.spacing.xs) {
+            Local402Flourish(size: 10)
+            Text("Recommended")
+                .font(Theme.font.caption)
+                .foregroundStyle(Theme.color.accentHover)
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, Theme.spacing.sm)
+        .background(Capsule().fill(Theme.color.accent.opacity(0.15)))
+        .overlay(Capsule().strokeBorder(Theme.color.accent.opacity(0.4), lineWidth: 1))
     }
 
     private var selectionIndicator: some View {
@@ -133,25 +142,56 @@ struct ModelOptionCard: View {
                 .foregroundStyle(Theme.color.paymentGreen)
             Spacer()
         }
+        .padding(.vertical, Theme.spacing.sm)
+        .padding(.horizontal, Theme.spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                .fill(Theme.color.paymentGreenSoft)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radius.md, style: .continuous)
+                .strokeBorder(Theme.color.paymentGreen.opacity(0.3), lineWidth: 1)
+        )
         .padding(.top, Theme.spacing.xs)
     }
 
     private var downloadingRow: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing.sm) {
-            HStack {
-                Text("Downloading…")
-                    .font(Theme.font.callout)
-                    .foregroundStyle(Theme.color.textSecondary)
-                Spacer()
-                Text("\(Int((downloadProgress * 100).rounded()))%")
-                    .font(Theme.font.callout)
-                    .foregroundStyle(Theme.color.accentHover)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+        HStack(spacing: Theme.spacing.md) {
+            progressRing
+
+            VStack(alignment: .leading, spacing: Theme.spacing.sm) {
+                HStack {
+                    Text("Downloading…")
+                        .font(Theme.font.callout)
+                        .foregroundStyle(Theme.color.textSecondary)
+                    Spacer()
+                    Text("\(Int((downloadProgress * 100).rounded()))%")
+                        .font(Theme.font.callout)
+                        .foregroundStyle(Theme.color.accentHover)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                }
+                progressBar
             }
-            progressBar
         }
         .padding(.top, Theme.spacing.xs)
+    }
+
+    private var progressRing: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.color.surfaceStroke, lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: max(0.001, downloadProgress))
+                .stroke(
+                    LinearGradient.local402Flourish,
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.2), value: downloadProgress)
+        }
+        .frame(width: 24, height: 24)
     }
 
     private var progressBar: some View {
@@ -160,7 +200,7 @@ struct ModelOptionCard: View {
                 Capsule()
                     .fill(Theme.color.surfaceStroke)
                 Capsule()
-                    .fill(Theme.color.accent)
+                    .fill(LinearGradient.local402Flourish)
                     .frame(width: max(0, proxy.size.width * downloadProgress))
                     .animation(.easeInOut(duration: 0.2), value: downloadProgress)
             }
@@ -168,16 +208,11 @@ struct ModelOptionCard: View {
         .frame(height: 4)
     }
 
-    // MARK: - Background & border
-
-    private var background: some View {
-        RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-            .fill(isSelected ? Theme.color.surfaceElevated : Theme.color.surface)
-    }
+    // MARK: - Border
 
     private var border: some View {
         RoundedRectangle(cornerRadius: Theme.radius.lg, style: .continuous)
-            .stroke(borderColor, lineWidth: isSelected ? 1.5 : 1)
+            .strokeBorder(borderColor, lineWidth: isSelected ? 1.5 : 1)
     }
 
     private var borderColor: Color {
