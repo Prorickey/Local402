@@ -87,7 +87,7 @@ final class MockCoinbaseService: CoinbaseServicing {
         )
     }
 
-    func search(_ query: String) async throws -> SearchResult {
+    func search(_ query: String) async throws -> WebSearchResult {
         try await sleep(Delay.search)
         let seed = nextSeed()
 
@@ -135,7 +135,7 @@ final class MockCoinbaseService: CoinbaseServicing {
         )
 
         logger.debug("MockCoinbaseService searched for \(topic, privacy: .public)")
-        return SearchResult(query: query, answer: answer, hits: hits, payment: payment)
+        return WebSearchResult(query: query, answer: answer, hits: hits, payment: payment)
     }
 
     // MARK: - Helpers

@@ -180,6 +180,16 @@ final class RAGStore {
         }
     }
 
+    // MARK: - Retrieval for the chat agent
+
+    /// Fetch the top matches for a query without touching the terminal's own
+    /// search UI state. Used by ChatStore to ground replies in local documents.
+    /// Returns an empty array if the engine isn't ready yet.
+    func retrieve(_ query: String, topK: Int = 4) async -> [SearchResult] {
+        guard let engine else { return [] }
+        return (try? await engine.search(query, topK: topK)) ?? []
+    }
+
     // MARK: - Inspect
 
     func select(_ doc: DocumentMeta) {

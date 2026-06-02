@@ -40,8 +40,8 @@ final class OnboardingState {
     var isDownloading = false
     var isModelReady = false
 
-    // Step B — company data
-    var files: [ContextFile] = MockFiles.seeded
+    // Step B — company data (mirrors the real on-device vector store)
+    var files: [ContextFile] = []
 
     // Step C-1 — Coinbase wallet provisioning
     var coinbase: CoinbaseConnectionState = .disconnected
@@ -112,6 +112,25 @@ final class OnboardingState {
         step = previous
     }
 
+    /// Fully reset the flow so onboarding can be re-run from scratch. Cancels
+    /// any in-flight simulations and clears the mirrored file list (the real
+    /// vector store is untouched — the data step re-syncs from it on appear).
+    func reset() {
+        downloadTask?.cancel()
+        connectTask?.cancel()
+        fundTask?.cancel()
+
+        step = .model
+        selectedModel = nil
+        downloadProgress = 0
+        isDownloading = false
+        isModelReady = false
+        files = []
+        coinbase = .disconnected
+        fundingAmount = 25
+        funding = .idle
+    }
+
     // MARK: - Step A: model download simulation
 
     func selectModel(_ model: LLMModelOption) {
@@ -139,16 +158,17 @@ final class OnboardingState {
 
     // MARK: - Step B: files
 
-    func addFile() {
-        files.append(MockFiles.nextFile(excluding: files))
-    }
-
-    func addDroppedFile(_ file: ContextFile) {
-        files.append(file)
-    }
-
-    func removeFile(_ file: ContextFile) {
-        files.removeAll { $0.id == file.id }
+    /// Rebuild the mirrored file list from the documents actually in the vector
+    /// store. ContextFile ids are derived from the document id, so SwiftUI keeps
+    /// stable identity across refreshes and a chip's removal maps back to a doc.
+    func syncDocuments(_ documents: [DocumentMeta]) {
+        files = documents.map { doc in
+            ContextFile(
+                id: UUID(uuidString: doc.id) ?? UUID(),
+                fileName: doc.filename,
+                sizeBytes: doc.sizeBytes
+            )
+        }
     }
 
     // MARK: - Step C-1: silent server-wallet provisioning

@@ -32,7 +32,7 @@ final class ConversationManager {
 
     private let store = ConversationStore()
     private let wallet: WalletStore
-    private let coinbase: any CoinbaseServicing
+    private let llm: LLMStore
     private let logger = Logger(subsystem: "tech.hiant.Local402", category: "ConversationManager")
 
     /// The live store for the selected conversation. Rebuilt on selection/creation.
@@ -47,9 +47,9 @@ final class ConversationManager {
     private var saveTasks: [UUID: Task<Void, Never>] = [:]
     private static let saveDebounce: Duration = .milliseconds(400)
 
-    init(wallet: WalletStore, coinbase: any CoinbaseServicing, defaultModelName: String) {
+    init(wallet: WalletStore, llm: LLMStore, defaultModelName: String) {
         self.wallet = wallet
-        self.coinbase = coinbase
+        self.llm = llm
 
         // A placeholder chat so `chat` is non-optional before async load completes.
         // Replaced synchronously by `bootstrap()`'s outcome below.
@@ -60,7 +60,7 @@ final class ConversationManager {
             updatedAt: Date(),
             messages: []
         )
-        let placeholderChat = ConversationManager.makeChat(for: placeholder, wallet: wallet, coinbase: coinbase)
+        let placeholderChat = ConversationManager.makeChat(for: placeholder, wallet: wallet, llm: llm)
 
         // All stored properties are assigned directly (no `self`-dependent subscript
         // mutation or method call) before `self` is fully initialized.
@@ -116,7 +116,7 @@ final class ConversationManager {
             messages: []
         )
         conversations[conversation.id] = conversation
-        let newStore = ConversationManager.makeChat(for: conversation, wallet: wallet, coinbase: coinbase)
+        let newStore = ConversationManager.makeChat(for: conversation, wallet: wallet, llm: llm)
         wireChat(newStore, conversation: conversation)
         chat = newStore
         selectedID = conversation.id
@@ -144,7 +144,7 @@ final class ConversationManager {
             return
         }
 
-        let newStore = ConversationManager.makeChat(for: conversation, wallet: wallet, coinbase: coinbase)
+        let newStore = ConversationManager.makeChat(for: conversation, wallet: wallet, llm: llm)
         wireChat(newStore, conversation: conversation)
         chat = newStore
         selectedID = id
@@ -195,7 +195,7 @@ final class ConversationManager {
                 messages: []
             )
             conversations[retargeted.id] = retargeted
-            let newStore = ConversationManager.makeChat(for: retargeted, wallet: wallet, coinbase: coinbase)
+            let newStore = ConversationManager.makeChat(for: retargeted, wallet: wallet, llm: llm)
             wireChat(newStore, conversation: retargeted)
             chat = newStore
             selectedID = retargeted.id
@@ -217,9 +217,9 @@ final class ConversationManager {
     private static func makeChat(
         for conversation: Conversation,
         wallet: WalletStore,
-        coinbase: any CoinbaseServicing
+        llm: LLMStore
     ) -> ChatStore {
-        ChatStore(wallet: wallet, coinbase: coinbase, conversation: conversation)
+        ChatStore(wallet: wallet, llm: llm, conversation: conversation)
     }
 
     /// Wires a chat store's change callback to debounced persistence + sidebar refresh.

@@ -42,9 +42,12 @@ nonisolated final class VectorStore {
                 filename    TEXT NOT NULL,
                 page_count  INTEGER NOT NULL,
                 chunk_count INTEGER NOT NULL,
+                size_bytes  INTEGER NOT NULL DEFAULT 0,
                 added_at    REAL NOT NULL
             );
             """)
+        // Best-effort upgrade for stores created before size tracking existed.
+        try? exec("ALTER TABLE documents ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0;")
         try exec("""
             CREATE TABLE IF NOT EXISTS chunks (
                 id          TEXT PRIMARY KEY,
@@ -66,13 +69,14 @@ nonisolated final class VectorStore {
     func insertDocument(_ meta: DocumentMeta, chunks: [(TextChunk, [Float])], dim: Int) throws {
         try exec("BEGIN IMMEDIATE TRANSACTION;")
         do {
-            let docSQL = "INSERT INTO documents (id, filename, page_count, chunk_count, added_at) VALUES (?,?,?,?,?);"
+            let docSQL = "INSERT INTO documents (id, filename, page_count, chunk_count, size_bytes, added_at) VALUES (?,?,?,?,?,?);"
             try withStatement(docSQL) { stmt in
                 sqlite3_bind_text(stmt, 1, meta.id, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_text(stmt, 2, meta.filename, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_int(stmt, 3, Int32(meta.pageCount))
                 sqlite3_bind_int(stmt, 4, Int32(meta.chunkCount))
-                sqlite3_bind_double(stmt, 5, meta.addedAt.timeIntervalSince1970)
+                sqlite3_bind_int(stmt, 5, Int32(meta.sizeBytes))
+                sqlite3_bind_double(stmt, 6, meta.addedAt.timeIntervalSince1970)
                 try step(stmt)
             }
 
@@ -121,7 +125,7 @@ nonisolated final class VectorStore {
     func allDocuments() throws -> [DocumentMeta] {
         var results: [DocumentMeta] = []
         try withStatement("""
-            SELECT id, filename, page_count, chunk_count, added_at
+            SELECT id, filename, page_count, chunk_count, size_bytes, added_at
             FROM documents ORDER BY added_at DESC;
             """) { stmt in
             while sqlite3_step(stmt) == SQLITE_ROW {
@@ -130,7 +134,8 @@ nonisolated final class VectorStore {
                     filename: column(stmt, 1),
                     pageCount: Int(sqlite3_column_int(stmt, 2)),
                     chunkCount: Int(sqlite3_column_int(stmt, 3)),
-                    addedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
+                    sizeBytes: Int(sqlite3_column_int(stmt, 4)),
+                    addedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
                 ))
             }
         }

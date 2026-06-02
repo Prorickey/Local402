@@ -3,15 +3,23 @@
 //  Local402
 //
 //  A single chat turn. Assistant turns render as a Copilot-style "answer card"
-//  (flourish mark, ordered text/payment segments, a per-answer spend chip, and
-//  a hover-revealed action row); user turns render as an asymmetric blue bubble.
-//  See DESIGN.md §3–§4.
+//  (flourish mark, ordered text/payment segments, a per-answer spend chip, a
+//  source-citation footer, and a hover-revealed action row); user turns render
+//  as an asymmetric blue bubble. While the assistant is replying it shows a live
+//  state: a model download/load status before generation starts, then streaming
+//  text. See DESIGN.md §3–§4.
 //
 
 import SwiftUI
 
 struct MessageBubble: View {
     let message: ChatMessage
+
+    /// While this message is streaming and the model isn't generating yet, a
+    /// short status line (e.g. "Downloading Qwen2.5 1.5B…") shown by the dots.
+    var loadingText: String? = nil
+    /// Download progress (0...1) for a determinate bar; nil = indeterminate.
+    var loadingProgress: Double? = nil
 
     static let maxAnswerWidth: CGFloat = 720
     private static let maxUserWidth: CGFloat = 560
@@ -23,7 +31,11 @@ struct MessageBubble: View {
             if isUser {
                 userTurn
             } else {
-                AssistantAnswerCard(message: message)
+                AssistantAnswerCard(
+                    message: message,
+                    loadingText: loadingText,
+                    loadingProgress: loadingProgress
+                )
             }
 
             Text(message.timestamp.formatted(date: .omitted, time: .shortened))
@@ -73,6 +85,8 @@ struct MessageBubble: View {
 
 private struct AssistantAnswerCard: View {
     let message: ChatMessage
+    var loadingText: String? = nil
+    var loadingProgress: Double? = nil
 
     @State private var hovering = false
 
@@ -84,12 +98,15 @@ private struct AssistantAnswerCard: View {
                 VStack(alignment: .leading, spacing: Theme.spacing.sm) {
                     segmentBody(for: message.segments)
 
-                    if showsTypingIndicator {
-                        TypingIndicatorView()
-                            .padding(.vertical, Theme.spacing.xs)
+                    if showsWaitingState {
+                        waitingState
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !message.isStreaming && !message.citations.isEmpty {
+                citationsFooter
             }
 
             if !message.isStreaming {
@@ -191,8 +208,62 @@ private struct AssistantAnswerCard: View {
         }
     }
 
+    // MARK: - Citations
+
+    /// One chip per unique (document, page) the model retrieved while answering.
+    private var citationsFooter: some View {
+        var seen = Set<String>()
+        let unique = message.citations.filter { seen.insert($0.label).inserted }
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.spacing.xs) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.color.textTertiary)
+
+                ForEach(unique) { citation in
+                    Text(citation.label)
+                        .font(Theme.font.caption)
+                        .foregroundStyle(Theme.color.textSecondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, Theme.spacing.sm)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.color.surfaceElevated))
+                        .overlay(Capsule().stroke(Theme.color.surfaceStroke, lineWidth: 1))
+                }
+            }
+            .padding(.leading, 34)
+        }
+        .accessibilityLabel("Sources: \(unique.map(\.label).joined(separator: ", "))")
+    }
+
+    // MARK: - Waiting / model-loading state
+
+    /// The "thinking"/loading state: animated dots, plus a model download/load
+    /// status line and progress bar when the model isn't ready yet.
+    private var waitingState: some View {
+        VStack(alignment: .leading, spacing: Theme.spacing.sm) {
+            HStack(spacing: Theme.spacing.sm) {
+                TypingIndicatorView()
+                if let loadingText {
+                    Text(loadingText)
+                        .font(Theme.font.caption)
+                        .foregroundStyle(Theme.color.textSecondary)
+                }
+            }
+
+            if let loadingProgress {
+                ProgressView(value: min(max(loadingProgress, 0), 1))
+                    .progressViewStyle(.linear)
+                    .tint(Theme.color.accent)
+                    .frame(maxWidth: 220)
+            }
+        }
+        .padding(.vertical, Theme.spacing.xs)
+    }
+
     /// `true` when streaming has started but no visible text/payment exists yet.
-    private var showsTypingIndicator: Bool {
+    private var showsWaitingState: Bool {
         message.isStreaming && !hasVisibleContent
     }
 
@@ -241,19 +312,16 @@ private struct AssistantAnswerCard: View {
     .preferredColorScheme(.dark)
 }
 
-#Preview("Streaming") {
+#Preview("Downloading model") {
     ZStack {
         Theme.color.background.ignoresSafeArea()
         MessageBubble(
-            message: ChatMessage(
-                role: .assistant,
-                segments: [],
-                timestamp: Date(),
-                isStreaming: true
-            )
+            message: ChatMessage(role: .assistant, segments: [], timestamp: Date(), isStreaming: true),
+            loadingText: "Downloading Qwen2.5 1.5B…",
+            loadingProgress: 0.42
         )
         .padding(Theme.spacing.xl)
     }
-    .frame(width: 760)
+    .frame(width: 640)
     .preferredColorScheme(.dark)
 }

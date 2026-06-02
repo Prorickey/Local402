@@ -24,8 +24,12 @@ struct ChatView: View {
             if appState.chat.messages.isEmpty {
                 emptyState
             } else {
-                MessageListView(messages: appState.chat.messages)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MessageListView(
+                    messages: appState.chat.messages,
+                    loadingText: modelLoadingText,
+                    loadingProgress: modelLoadingProgress
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             ChatInputBar()
@@ -56,6 +60,22 @@ struct ChatView: View {
         .padding(.horizontal, Theme.spacing.lg)
         .padding(.vertical, Theme.spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Model loading status (shown in the streaming bubble)
+
+    private var modelLoadingText: String? {
+        guard appState.chat.isStreaming else { return nil }
+        switch appState.llm.phase {
+        case .downloading: return "Downloading \(appState.llm.modelName)…"
+        case .loading: return "Loading \(appState.llm.modelName)…"
+        default: return nil
+        }
+    }
+
+    private var modelLoadingProgress: Double? {
+        if case .downloading(let fraction) = appState.llm.phase { return fraction }
+        return nil
     }
 
     // MARK: - Empty state

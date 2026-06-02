@@ -14,7 +14,12 @@ struct DocumentMeta: Identifiable, Hashable, Sendable {
     let filename: String
     let pageCount: Int
     let chunkCount: Int
+    let sizeBytes: Int
     let addedAt: Date
+
+    var sizeLabel: String {
+        ByteCountFormatter.string(fromByteCount: Int64(sizeBytes), countStyle: .file)
+    }
 }
 
 /// A single retrieval hit returned from a search.

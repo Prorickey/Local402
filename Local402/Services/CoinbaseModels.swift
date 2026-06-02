@@ -55,7 +55,7 @@ struct SearchHit: Sendable, Hashable {
 
 /// Result of a real Tavily-over-x402 search: the hits plus the on-chain payment
 /// that paid for them.
-struct SearchResult: Sendable, Hashable {
+struct WebSearchResult: Sendable, Hashable {
     let query: String
     let answer: String?
     let hits: [SearchHit]
@@ -107,5 +107,5 @@ protocol CoinbaseServicing: Sendable {
 
     /// Performs a REAL Tavily web search paid over x402 from the user's wallet
     /// (BFF `POST /tools/search`). Returns the real results + the settlement.
-    func search(_ query: String) async throws -> SearchResult
+    func search(_ query: String) async throws -> WebSearchResult
 }

@@ -10,6 +10,9 @@ import SwiftUI
 
 struct MessageListView: View {
     let messages: [ChatMessage]
+    /// Status shown by the streaming bubble while the model loads (download/load).
+    var loadingText: String? = nil
+    var loadingProgress: Double? = nil
 
     private static let bottomAnchor = "bottom"
 
@@ -21,8 +24,12 @@ struct MessageListView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.spacing.xl) {
                     ForEach(messages) { message in
-                        MessageBubble(message: message)
-                            .id(message.id)
+                        MessageBubble(
+                            message: message,
+                            loadingText: message.isStreaming ? loadingText : nil,
+                            loadingProgress: message.isStreaming ? loadingProgress : nil
+                        )
+                        .id(message.id)
                     }
 
                     // Invisible anchor pinned to the bottom for auto-scroll.
@@ -41,6 +48,9 @@ struct MessageListView: View {
             .onChange(of: lastSegmentCount) {
                 scrollToBottom(proxy)
             }
+            .onChange(of: lastMessageLength) {
+                scrollToBottom(proxy)
+            }
             .onAppear {
                 proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
             }
@@ -50,6 +60,16 @@ struct MessageListView: View {
     /// Segment count of the last message — changes while a reply streams in.
     private var lastSegmentCount: Int {
         messages.last?.segments.count ?? 0
+    }
+
+    /// Total text length of the last message — grows token-by-token while
+    /// streaming, so auto-scroll follows the live reply.
+    private var lastMessageLength: Int {
+        guard let last = messages.last else { return 0 }
+        return last.segments.reduce(0) { sum, segment in
+            if case .text(let value) = segment { return sum + value.count }
+            return sum + 1
+        }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {

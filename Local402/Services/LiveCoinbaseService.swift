@@ -91,7 +91,7 @@ final class LiveCoinbaseService: CoinbaseServicing {
         )
     }
 
-    func search(_ query: String) async throws -> SearchResult {
+    func search(_ query: String) async throws -> WebSearchResult {
         let body = SearchRequest(query: query)
         // Tavily search can take a few seconds (live web crawl + facilitator
         // settlement), so allow a more generous per-request timeout than the
@@ -126,7 +126,7 @@ final class LiveCoinbaseService: CoinbaseServicing {
             )
         }
 
-        return SearchResult(
+        return WebSearchResult(
             query: response.query,
             answer: response.answer,
             hits: hits,
