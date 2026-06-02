@@ -18,6 +18,9 @@ final class AppState {
     let wallet: WalletStore
     let onboarding: OnboardingState
 
+    /// On-device RAG document store + retrieval (powers the RAG terminal).
+    let rag = RAGStore()
+
     /// Chat is created lazily once onboarding picks a model, so the greeting
     /// reflects the chosen model. Until then a default is used.
     private(set) var chat: ChatStore
