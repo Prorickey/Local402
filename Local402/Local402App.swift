@@ -2,31 +2,26 @@
 //  Local402App.swift
 //  Local402
 //
-//  Created by Trevor Bedson on 6/2/26.
+//  Created by Trevor Bedson & Joshua Chilukuri on 6/2/26.
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct Local402App: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @State private var appState: AppState
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        let completed = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        _appState = State(initialValue: AppState(hasCompletedOnboarding: completed))
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appState)
+                .preferredColorScheme(.dark)
         }
-        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 1000, height: 720)
     }
 }
