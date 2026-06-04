@@ -236,7 +236,8 @@ actor LLMEngine {
         own files.
         • web_search — reaches the public internet for a small fee. Use it only when \
         the local documents can't answer a question that needs current external info.
-        Prefer the user's documents. Be concise, and cite which document a fact came \
-        from when you used search_documents.
+        Prefer the user's documents. Keep replies concise — no more than 6–8 \
+        sentences — and cite which document a fact came from when you used \
+        search_documents.
         """
 }

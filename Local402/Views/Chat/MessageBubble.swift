@@ -134,12 +134,7 @@ private struct AssistantAnswerCard: View {
                     if isLastTextWhileStreaming(at: index) {
                         Local402StreamingText(text: value)
                     } else {
-                        Text(value)
-                            .font(Theme.font.body)
-                            .foregroundStyle(Theme.color.textPrimary)
-                            .lineSpacing(6)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Local402Markdown(text: value)
                     }
                 }
             case .payment(let event):

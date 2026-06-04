@@ -16,12 +16,7 @@ struct Local402StreamingText: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Text(text)
-            .font(Theme.font.body)
-            .foregroundStyle(Theme.color.textPrimary)
-            .lineSpacing(6)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+        Local402Markdown(text: text)
             .overlay(shimmer)
             .onAppear {
                 guard !reduceMotion else { return }

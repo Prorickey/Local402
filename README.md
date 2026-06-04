@@ -23,7 +23,7 @@ No data leaves your machine unless the model deliberately asks the web a questio
 
 The local model is the privacy boundary. When you feed private documents (contracts, financials, medical records, internal reports) into a hosted LLM, your full context window — every document, every reasoning step — leaves your machine before any search is even formed.
 
-With Local402, the model processes everything on-device on Apple Silicon's GPU via MLX. The only signal that ever leaves is a final search query, deliberately emitted by the model as a tool call, with a micropayment attached.
+With Local402, the model processes everything on-device on Apple Silicon's GPU via MLX. The only signal that ever leaves is a final search query, deliberately emitted by the model as a tool call, with a micropayment attached. Payments are brokered by a small backend-for-frontend (BFF) you run — it holds the wallet secrets and never sees your documents or your reasoning.
 
 **Privacy surface comparison:**
 
@@ -31,9 +31,9 @@ With Local402, the model processes everything on-device on Apple Silicon's GPU v
 |---|---|---|
 | Your documents | Sent to provider | Stay on device |
 | Reasoning chain | Sent to provider | Stays on device |
-| Search queries | Sent to provider + search API | Sent to a search API only, via x402 |
+| Search queries | Sent to provider + search API | Only the query leaves, via an x402 tool call |
 | Provider data logging | Per their ToS | None |
-| Variable cost | Tokens + search | Search only (USDC, on-chain) |
+| Variable cost | Tokens + search | Search only ($0.01 / web search) |
 
 ---
 
@@ -58,7 +58,7 @@ With Local402, the model processes everything on-device on Apple Silicon's GPU v
 
 ### Real x402 Coinbase Wallet
 - A **CDP server wallet** is provisioned silently during onboarding — no Coinbase login, no terminal, no `.env` for the user, no CLI.
-- Funding presents a native **Apple Pay** sheet in-app (no popups/webviews); a backend treasury delivers **real USDC on Base mainnet**.
+- Funding is confirmed through an Apple Pay-style sheet *(simulated in this build — see the note under Requirements)*; the BFF treasury then delivers **real USDC on Base mainnet**.
 - Agent web searches settle as **real x402 payments** via the Coinbase facilitator (EIP-3009), with verifiable Base transaction hashes.
 - The Wallet tab shows live balance, address, and per-query spend history; each answer shows a "Spent $… on this answer" chip.
 
@@ -70,7 +70,7 @@ With Local402, the model processes everything on-device on Apple Silicon's GPU v
 ### Native macOS Experience
 - SwiftUI, resizable and desktop-native, with a dark-blue, Microsoft-Copilot-inspired "Fluent" theme (acrylic chrome).
 - In-app top bar with **Chat**, **RAG**, **Wallet**, and **Settings** tabs.
-- App Sandbox on; hardened runtime; Apple Pay + outbound-network entitlements.
+- App Sandbox on; hardened runtime; outbound-network (`network.client`) entitlement.
 
 ---
 
@@ -138,10 +138,20 @@ Key seams:
 | Local embeddings | Apple `NaturalLanguage` (`NLEmbedding`) |
 | Vector store | SQLite-backed local vector index (cosine similarity) |
 | Tool calling | Native function calling via `ChatSession` |
+| Conversation persistence | JSON files under Application Support (index + one file per chat) |
 | Payment rail | **x402** + Coinbase CDP Server Wallets + facilitator (Base mainnet USDC) |
 | Web search | **Tavily** (`x402.tavily.com`), paid per call over x402 |
-| Funding | Native Apple Pay (PassKit) + CDP treasury USDC transfer |
-| Backend (BFF) | Node + TypeScript, Express (`@coinbase/cdp-sdk`, `@coinbase/x402`, `@x402/fetch`, `viem`) |
+| Funding | Simulated Apple Pay-style sheet + CDP treasury USDC transfer |
+| Backend (BFF) | Node + TypeScript, Express (`@coinbase/cdp-sdk`, `@coinbase/x402`, `@x402/fetch`, `viem`) — holds all secrets |
+
+---
+
+## Why Swift
+
+- **Apple Silicon performance** — MLX runs the model on the GPU via Metal, extracting maximum performance from M-series chips
+- **Native privacy APIs** — macOS sandboxing, entitlements, and the Secure Enclave are first-class
+- **No runtime dependencies in the app** — ships as a self-contained binary; no Python, Node, or Docker for the *user* to manage (the BFF is operator-side, not user-facing)
+- **SwiftUI** — declarative UI that keeps the documents / chat / wallet layout clean
 
 ---
 
@@ -160,10 +170,12 @@ Suitable for use cases where data residency matters: legal research, financial a
 
 ## Requirements
 
-- macOS 15 (Sequoia) or later.
-- **Apple Silicon (M1 or later)** — required; MLX inference uses the Metal GPU.
-- ~1–2 GB free disk for the model weights (downloaded once, on first chat).
-- For real payments: a running BFF (`bff/`) with Coinbase CDP credentials and a funded treasury wallet on Base mainnet.
+- macOS 14 (Sonoma) or later
+- **Apple Silicon (M1 or later)** — required; MLX inference uses the Metal GPU
+- ~1–2 GB free disk for the model weights (downloaded once, on first chat)
+- For **live payments**: run the BFF (`bff/`) with Coinbase CDP credentials and a treasury wallet pre-funded with a small USDC balance on Base mainnet. Or set `CoinbaseConfig.demoMode = true` to run the entire UI against the in-memory mock with no backend, keys, or network.
+
+> **Apple Pay note:** the app no longer declares the Apple Pay (In-App Payments) capability, so it signs cleanly with a free / personal Apple Developer team. Funding uses a simulated Apple Pay-style confirmation (`CoinbaseConfig.simulateApplePay = true`); no real dollars are charged — the BFF treasury simply sends USDC. To present the native PassKit sheet instead, you need a paid team with a registered Merchant ID, then re-add the capability and set `simulateApplePay = false`.
 
 ---
 
@@ -175,6 +187,17 @@ Suitable for use cases where data residency matters: legal research, financial a
 git clone https://github.com/Prorickey/Local402
 open Local402.xcodeproj   # Swift packages resolve automatically
 ```
+
+For live payments, start the backend-for-frontend in a second terminal:
+
+```bash
+cd bff
+cp .env.example .env   # fill in real CDP credentials + treasury account
+npm install
+npm run dev            # serves on http://localhost:8787
+```
+
+> Reaching `http://localhost` from the sandboxed app needs an ATS local-networking exception (or point `CoinbaseConfig.bffURL` at an HTTPS tunnel). To skip the backend entirely, set `CoinbaseConfig.demoMode = true`.
 
 On first launch:
 1. Pick a local model — it downloads from Hugging Face on first use.
@@ -205,12 +228,15 @@ npm run dev              # serves http://localhost:8787
 ## Roadmap
 
 - [x] Wire `web_search` to Tavily and settle the call over x402
+- [x] Real CDP server wallet, funding, and on-chain balance
+- [x] Persisted conversations with a history sidebar
+- [x] Document citations reported from the retrieval tool
 - [x] Surface model download/load progress in the chat UI
-- [x] Multi-document citations in the chat answer
-- [x] Persistent, on-disk conversation history
+- [ ] Source highlighting for multi-document citations in SwiftUI
+- [ ] Enforce spend-limit controls per session (the Frugal/Balanced/Thorough selector exists; make it gate spend)
+- [ ] Production x402 path: EIP-3009 `transferWithAuthorization` settled via the Coinbase facilitator against a live 402-issuing counterpart
 - [ ] Productionize native Apple Pay (Merchant ID + signed build) and turn off `simulateApplePay`
 - [ ] Deploy the BFF off `localhost` to HTTPS
-- [ ] Enforce spend-limit controls per session (the Frugal/Balanced/Thorough selector exists; make it gate spend)
 - [ ] OCR for scanned/image-only PDFs
 - [ ] Export research sessions as PDF reports
 - [ ] Team mode — shared local document store over LAN
